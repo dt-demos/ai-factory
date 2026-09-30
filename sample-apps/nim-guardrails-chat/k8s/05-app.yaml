@@ -1,0 +1,116 @@
+# ---------------------------------------------------------------------------
+# Secret — sensitive credentials (fill in before applying)
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: nim
+type: Opaque
+stringData:
+  # Required for NIM cloud API access (CONFIG_TYPE=build)
+  NVIDIA_API_KEY: "<your-nvidia-api-key>"
+  # Required for web search (Tavily)
+  TAVILY_API_KEY: "<your-tavily-api-key>"
+---
+# ---------------------------------------------------------------------------
+# ConfigMap — non-sensitive runtime configuration
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: nim
+data:
+  # "build" uses NVIDIA cloud API endpoints; "brev" uses in-cluster NIM services
+  CONFIG_TYPE: "local"
+
+  # OpenTelemetry collector endpoint — update to your DT ActiveGate or OTel collector
+  # For in-cluster otel-collector:  http://otel-collector.nim.svc.cluster.local:4318
+  OTEL_OTLP_ENDPOINT: "http://otel-collector.nim.svc.cluster.local:4318"
+
+  # Set to the workshop participant's GitHub username for service-name scoping
+  GITHUB_USER: "" 
+
+  # -------------------------------------------------------------------------
+  # Only required when CONFIG_TYPE=brev (pointing at in-cluster NIM services)
+  # These match the ClusterIP Service ports defined in 01-04 manifests.
+  # -------------------------------------------------------------------------
+  NVIDIA_MODEL_ENDPOINT_8001: "http://nim-llama-70b.nim.svc.cluster.local:8001"
+  NVIDIA_MODEL_ENDPOINT_8002: "http://nim-content-safety.nim.svc.cluster.local:8002"
+  NVIDIA_MODEL_ENDPOINT_8003: "http://nim-topic-control.nim.svc.cluster.local:8003"
+  NVIDIA_MODEL_ENDPOINT_8004: "http://nim-embedqa.nim.svc.cluster.local:8004"
+---
+# ---------------------------------------------------------------------------
+# Deployment
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nvidia-workshop-app
+  namespace: nim
+  labels:
+    app: nvidia-workshop-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nvidia-workshop-app
+  template:
+    metadata:
+      labels:
+        app: nvidia-workshop-app
+    spec:
+      containers:
+        - name: app
+          image: nvidia-workshop-app:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+              name: http
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+---
+# ---------------------------------------------------------------------------
+# Service — LoadBalancer for external frontend access
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: nvidia-workshop-app
+  namespace: nim
+  labels:
+    app: nvidia-workshop-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: nvidia-workshop-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8501
+      protocol: TCP

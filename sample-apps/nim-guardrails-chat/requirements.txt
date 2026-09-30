@@ -1,0 +1,21 @@
+# Streamlit for web interface
+streamlit>=1.55.0,<1.56.0
+
+# Load .env file into environment
+python-dotenv>=1.0.0
+
+# NeMo Guardrails for AI safety
+nemoguardrails>=0.19.0
+
+# NVIDIA NAT (NeMo Agent Toolkit) with extensions
+nvidia-nat[langchain]~=1.8
+nemo-agent-toolkit-tavily
+
+# Vector search
+usearch~=2.21.0
+
+# OpenTelemetry for observability
+opentelemetry-sdk>=1.40.0,<1.41.0
+opentelemetry-exporter-otlp>=1.40.0,<1.41.0
+traceloop-sdk==0.51.1
+opentelemetry-instrumentation-langchain==0.52.6
