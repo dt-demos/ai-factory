@@ -26,9 +26,10 @@ This diagram below depicts the setup consisting of:
 
 ## Models Used
 
-* `google/gemma-4-31b-it` — The main conversational LLM, used for the NAT tool-calling agent workflow and the `check_politics` guardrail. Called via the NVIDIA cloud API (`integrate.api.nvidia.com`).
-* `nvidia/nemotron-3.5-content-safety` — The safety classifier used for both content safety guardrails (detecting harmful or unsafe input/output) and topic control guardrails (blocking political content). Runs on both input and output rails.
-* `nvidia/nv-embedqa-e5-v5` — The embedding model used by the NAT workflow for semantic search and retrieval.
+* The main conversational LLM, used for the NAT tool-calling agent workflow and the check_politics guardrail. (`google/gemma-4-31b-it`)
+* Safety classifier for detecting harmful or unsafe input/output (`nvidia/nemotron-3.5-content-safety`)
+* Topic control guardrail for blocking political content. Runs on both input and output rails. (`nvidia/llama-3.1-nemoguard-8b-topic-control`)
+* The embedding model used by the NAT workflow for semantic search and retrieval (`nvidia/nv-embedqa-e5-v5`)
 
 # Running the App
 
