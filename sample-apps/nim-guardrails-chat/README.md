@@ -37,6 +37,8 @@ The application support multiple options to run, deploy, and what LLM models to 
 * LLM Models - locally hosted or cloud hosted
 * Deployment - with Docker or in K8s
 
+See [PROMPTS.md](PROMPTS.md) for example prompts to explore how the guardrails behave.
+
 ## Deployment Option :: Docker with Cloud Hosted
 
 Create a `.env` file:

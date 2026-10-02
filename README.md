@@ -1,6 +1,6 @@
-# Dell AI Factory — Demo Applications
+# AI Factory — Demo Applications
 
-This repo contains sample applications demonstrating AI inference and observability patterns on the Dell AI Factory platform using NVIDIA NIM, NeMo Agent Toolkit (NAT), and Dynatrace.
+This repo contains sample applications demonstrating AI inference and observability patterns on the AI Factory platforms using NVIDIA NIM, NeMo Agent Toolkit (NAT), and Dynatrace.
 
 ## Sample Apps
 

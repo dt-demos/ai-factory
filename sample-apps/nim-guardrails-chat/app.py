@@ -439,9 +439,10 @@ def main():
     """, unsafe_allow_html=True)
     
     # Header
+    # Alt tagline - NVIDIA NeMo Agent Toolkit, NeMo Guardrails and Dynatrace Insights"
     st.markdown('<div class="main-header">Operationalizing AI at Scale</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Built on Dell. Powered by NVIDIA. Observed by Dynatrace.</div>', unsafe_allow_html=True)
-    st.markdown('<div style="text-align: center;"><img src="app/static/dynatrace.png" alt="Dynatrace and NVIDIA" width="300" style="margin: auto; display: block;"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="text-align: center;"><img src="app/static/dell-dynatrace.png" alt="Dynatrace and NVIDIA" width="300" style="margin: auto; display: block;"></div>', unsafe_allow_html=True)
 
     # Main content area
     col1, col2, col3 = st.columns([1, 3, 1])
