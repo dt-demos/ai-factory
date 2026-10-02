@@ -1,8 +1,22 @@
 # NIM Guardrails Chat
 
-![Architecture](static/architecture.png)
+This repository provides a chat app that demonstrates NVIDIA NeMo Guardrails with NIM model endpoints. The app supports input safety rails (jailbreak detection, blocked terms, input length, politics filtering) and exports traces via OpenTelemetry.
 
-A Streamlit chat app that demonstrates NVIDIA NeMo Guardrails with NIM model endpoints. The app supports input safety rails (jailbreak detection, blocked terms, input length, politics filtering) and exports traces via OpenTelemetry.
+The chat app was built using:
+* NVIDIA NeMo Agent Toolkit](https://docs.nvidia.com/nemo/agent-toolkit/) and 
+* NVIDIA [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails). 
+* [streamlit](https://www.streamlit.io) open-source app framework
+
+All of the observability telemetry of traces, logs, and metrics are collected using the [Dynatrace distribution of the OpenTelemetry Collector](https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector) for analysis within [Dynatrace](https://www.dynatrace.com).
+
+This diagram below depicts the setup consisting of:
+* Chat app - Used to generate prompts and send telemetry data to and OpenTelemetry Collector
+* OpenTelemetry Collector - Configured to send telemetry data to Dynatrace OTLP APIs
+* LLM models - Locally hosted
+* Tavily - Uses as Agentic tool to search the internet and accessed via APIs and a Build API key
+* Dynatrace - Observability and analysis
+
+![Architecture](static/architecture.png)
 
 ## Prerequisites
 
