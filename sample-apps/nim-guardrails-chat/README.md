@@ -3,7 +3,7 @@
 This chat app demonstrates NVIDIA NeMo Guardrails with NIM model endpoints. The app supports input safety rails (jailbreak detection, blocked terms, input length, politics filtering) and exports traces via OpenTelemetry.
 
 The chat app was built using:
-* NVIDIA NeMo Agent Toolkit](https://docs.nvidia.com/nemo/agent-toolkit/) and 
+* [NVIDIA NeMo Agent Toolkit](https://docs.nvidia.com/nemo/agent-toolkit/) and 
 * NVIDIA [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails). 
 * [streamlit](https://www.streamlit.io) open-source app framework
 
@@ -20,7 +20,6 @@ This diagram below depicts the setup consisting of:
 
 ## Prerequisites
 
-- Docker installed and running
 - NVIDIA API key from [build.nvidia.com](https://build.nvidia.com)
 - Tavily API key (used for web search)
 - Dynatrace OTel ingest endpoint and API token (for tracing)
@@ -28,20 +27,16 @@ This diagram below depicts the setup consisting of:
 ## Models Used
 
 * `google/gemma-4-31b-it` — The main conversational LLM, used for the NAT tool-calling agent workflow and the `check_politics` guardrail. Called via the NVIDIA cloud API (`integrate.api.nvidia.com`).
-
 * `nvidia/nemotron-3.5-content-safety` — The safety classifier used for both content safety guardrails (detecting harmful or unsafe input/output) and topic control guardrails (blocking political content). Runs on both input and output rails.
-
 * `nvidia/nv-embedqa-e5-v5` — The embedding model used by the NAT workflow for semantic search and retrieval.
 
-## Docker Build
+# Running the App
 
-Run from inside this directory:
+The application support multiple options to run, deploy, and what LLM models to use.
+* LLM Models - locally hosted or cloud hosted
+* Deployment - with Docker or in K8s
 
-```bash
-docker build -t nim-guardrails-chat .
-```
-
-## Running the App
+## Deployment Option :: Docker with Cloud Hosted
 
 Create a `.env` file:
 
@@ -76,12 +71,10 @@ docker run -it --rm \
 
 The app will be available at `http://localhost:8501`.
 
-## Useful Commands
+# Building the app
+
+Run from inside this directory:
 
 ```bash
-# View logs
-docker logs -f nim-guardrails-chat
-
-# Stop and remove
-docker stop nim-guardrails-chat && docker rm nim-guardrails-chat
+docker build -t nim-guardrails-chat .
 ```
