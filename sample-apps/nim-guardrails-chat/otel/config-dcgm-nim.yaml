@@ -8,29 +8,44 @@ receivers:
   prometheus:
      config:
        scrape_configs:
+       # Defaults point at the in-cluster lab services; override with env vars
+       # (e.g. start-otel.sh sets these for a local Docker run).
+       # Scrape every dcgm-exporter pod (one per GPU node). Scraping the Service
+       # only reaches one node per scrape. Requires the RBAC in k8s/otel-collector.yaml.
        - job_name: dcgm
          scrape_interval: 60s
-         static_configs:
-         - targets:
-            - ${env:DCGM_TARGET}
-       - job_name: nim-llama-70b-instruct
+         kubernetes_sd_configs:
+         - role: endpointslice
+           namespaces:
+             names: [gpu-operator]
+         relabel_configs:
+         - source_labels: [__meta_kubernetes_service_name]
+           regex: nvidia-dcgm-exporter
+           action: keep
+       - job_name: llama-3.1-nemotron-70b-instruct
          scrape_interval: 10s
-         metrics_path: /v1/metrics
+         metrics_path: /metrics
          static_configs:
          - targets:
-            - ${env:NIM1_TARGET}
+            - ${env:NIM1_TARGET:-nemotron-70b-instruct.nim-service:8000}
        - job_name: llama-3.1-nemoguard-8b-content-safety
          scrape_interval: 10s
          metrics_path: /v1/metrics
          static_configs:
          - targets:
-            - ${env:NIM2_TARGET}
+            - ${env:NIM2_TARGET:-content-safety.nim-service:8000}
        - job_name: llama-3.1-nemoguard-8b-topic-control
          scrape_interval: 10s
          metrics_path: /v1/metrics
          static_configs:
          - targets:
-            - ${env:NIM3_TARGET}
+            - ${env:NIM3_TARGET:-topic-control.nim-service:8000}
+       - job_name: nv-embedqa-e5-v5
+         scrape_interval: 10s
+         metrics_path: /v1/metrics
+         static_configs:
+         - targets:
+            - ${env:NIM4_TARGET:-embedqa-e5-v5.nim-service:8000}
 processors:
   cumulativetodelta:
     max_staleness: 25h

@@ -20,14 +20,14 @@ functions:
 llms:
   nim_llm:
     _type: nim
-    model_name: meta/llama-4-scout-17b-16e-instruct
+    model_name: mistralai/mistral-7b-instruct-v0.3
     base_url: NVIDIA_MODEL_ENDPOINT_8001_PLACEHOLDER
     temperature: 0.1
 
 embedders:
   nv-embedqa-e5-v5:
     _type: nim
-    model_name: nvidia/nv-embedqa-e5-v5
+    model_name: nvidia/llama-3.2-nv-embedqa-1b-v2
     base_url: NVIDIA_MODEL_ENDPOINT_8004_PLACEHOLDER
 
 workflow:

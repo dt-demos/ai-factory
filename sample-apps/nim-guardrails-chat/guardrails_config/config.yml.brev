@@ -3,7 +3,7 @@ models:
   # Main LLM - Local NIM deployment on port 8001
   - type: main
     engine: nim
-    model: meta/llama-4-scout-17b-16e-instruct
+    model: mistralai/mistral-7b-instruct-v0.3
     parameters:
       base_url: NVIDIA_MODEL_ENDPOINT_8001_PLACEHOLDER
 

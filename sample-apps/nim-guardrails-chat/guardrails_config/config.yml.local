@@ -1,25 +1,25 @@
 # NeMo Guardrails Configuration
 models:
-  # Main LLM - Local NIM deployment on port 8001
+  # Main LLM - NIM service nemotron-70b-instruct.nim-service:8000
   - type: main
     engine: nim
-    model: meta/llama-4-scout-17b-16e-instruct
+    model: nvidia/llama-3.1-nemotron-70b-instruct
     parameters:
-      base_url: http://localhost:8001/v1
+      base_url: http://nemotron-70b-instruct.nim-service:8000/v1
 
-  # Content Safety Model - Local NIM deployment on port 8002
+  # Content Safety Model - NIM service content-safety.nim-service:8000
   - type: content_safety
     engine: nim
     model: nvidia/llama-3.1-nemoguard-8b-content-safety
     parameters:
-      base_url: http://localhost:8002/v1
+      base_url: http://content-safety.nim-service:8000/v1
 
-  # Topic Control Model - Local NIM deployment on port 8003
+  # Topic Control Model - NIM service topic-control.nim-service:8000
   - type: topic_control
     engine: nim
     model: nvidia/llama-3.1-nemoguard-8b-topic-control
     parameters:
-      base_url: http://localhost:8003/v1
+      base_url: http://topic-control.nim-service:8000/v1
 
 
 instructions:

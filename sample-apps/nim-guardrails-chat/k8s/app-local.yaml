@@ -26,20 +26,24 @@ data:
   CONFIG_TYPE: "local"
 
   # OpenTelemetry collector endpoint — update to your DT ActiveGate or OTel collector
-  # For in-cluster otel-collector:  http://otel-collector.nim.svc.cluster.local:4318
-  OTEL_OTLP_ENDPOINT: "http://otel-collector.nim.svc.cluster.local:4318"
+  # For in-cluster otel-collector:  http://dynatrace-otel-collector.nim.svc.cluster.local:4318
+  OTEL_OTLP_ENDPOINT: "http://dynatrace-otel-collector.nim.svc.cluster.local:4318"
 
   # Set to the workshop participant's GitHub username for service-name scoping
   GITHUB_USER: "" 
 
   # -------------------------------------------------------------------------
   # Only required when CONFIG_TYPE=brev (pointing at in-cluster NIM services)
-  # These match the ClusterIP Service ports defined in 01-04 manifests.
+  # These point at the lab NIM services in the nim-service namespace.
   # -------------------------------------------------------------------------
-  NVIDIA_MODEL_ENDPOINT_8001: "http://nim-llama-70b.nim.svc.cluster.local:8001"
-  NVIDIA_MODEL_ENDPOINT_8002: "http://nim-content-safety.nim.svc.cluster.local:8002"
-  NVIDIA_MODEL_ENDPOINT_8003: "http://nim-topic-control.nim.svc.cluster.local:8003"
-  NVIDIA_MODEL_ENDPOINT_8004: "http://nim-embedqa.nim.svc.cluster.local:8004"
+  # nvidia/llama-3.1-nemotron-70b-instruct
+  NVIDIA_MODEL_ENDPOINT_8001: "http://nemotron-70b-instruct.nim-service.svc.cluster.local:8000/v1"
+  # nvidia/llama-3.1-nemoguard-8b-content-safety
+  NVIDIA_MODEL_ENDPOINT_8002: "http://content-safety.nim-service.svc.cluster.local:8000/v1"
+  # nvidia/llama-3.1-nemoguard-8b-topic-control
+  NVIDIA_MODEL_ENDPOINT_8003: "http://topic-control.nim-service.svc.cluster.local:8000/v1"
+  # nvidia/nv-embedqa-e5-v5
+  NVIDIA_MODEL_ENDPOINT_8004: "http://embedqa-e5-v5.nim-service.svc.cluster.local:8000/v1"
 ---
 # ---------------------------------------------------------------------------
 # Deployment

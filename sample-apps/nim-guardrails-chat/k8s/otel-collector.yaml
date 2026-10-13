@@ -1,0 +1,121 @@
+# ---------------------------------------------------------------------------
+# Dynatrace OpenTelemetry Collector — gateway Deployment (raw manifest)
+# https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector/deployment#kubernetes--raw-manifest
+#
+# Prerequisites (both created by deploy-otel-collector.sh):
+#   Secret    dynatrace-otelcol-dt-api-credentials  (DT_BASE_URL, DT_API_TOKEN)
+#   ConfigMap dynatrace-otel-collector-config        (from ../otel/config-dcgm-nim.yaml)
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dynatrace-otel-collector
+  namespace: nim
+---
+# Lets the collector discover dcgm-exporter pods in gpu-operator (Prometheus
+# kubernetes_sd_configs role: endpointslice)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dynatrace-otel-collector-sd
+  namespace: gpu-operator
+rules:
+  - apiGroups: [""]
+    resources: [pods, services]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dynatrace-otel-collector-sd
+  namespace: gpu-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dynatrace-otel-collector-sd
+subjects:
+  - kind: ServiceAccount
+    name: dynatrace-otel-collector
+    namespace: nim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dynatrace-otel-collector
+  namespace: nim
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: dynatrace-otel-collector
+    app.kubernetes.io/name: dynatrace-otel-collector
+  ports:
+    - name: otlp
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+      appProtocol: grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dynatrace-otel-collector
+  namespace: nim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dynatrace-otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: dynatrace-otel-collector
+        app.kubernetes.io/name: dynatrace-otel-collector
+    spec:
+      serviceAccountName: dynatrace-otel-collector
+      containers:
+        - name: dynatrace-otel-collector
+          image: ghcr.io/dynatrace/dynatrace-otel-collector/dynatrace-otel-collector:0.56.0
+          args: ["--config", "/conf/otel-collector-config.yaml"]
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: DT_BASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dynatrace-otelcol-dt-api-credentials
+                  key: DT_BASE_URL
+            - name: DT_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: dynatrace-otelcol-dt-api-credentials
+                  key: DT_API_TOKEN
+          ports:
+            - containerPort: 4317
+              name: otlp
+            - containerPort: 4318
+              name: otlp-http
+            - containerPort: 8888 # collector's own telemetry metrics
+              name: metrics
+          resources:
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: dynatrace-otel-collector-config
+              mountPath: /conf
+      volumes:
+        - name: dynatrace-otel-collector-config
+          configMap:
+            name: dynatrace-otel-collector-config
+            items:
+              - key: otel-collector-config
+                path: otel-collector-config.yaml
