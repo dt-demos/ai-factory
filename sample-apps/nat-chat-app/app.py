@@ -9,6 +9,7 @@ import warnings
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -39,12 +40,25 @@ warnings.filterwarnings("ignore", message=".*validate_default.*", module="pydant
 # for streamlit app
 import streamlit as st
 
+# authlib (pulled in by NAT) adds its own "always" filter for its deprecation warning when imported,
+# which overrides the blanket "ignore" set in configure_logging(). Import it first, then silence it.
+try:
+    from authlib.deprecate import AuthlibDeprecationWarning
+    warnings.filterwarnings("ignore", category=AuthlibDeprecationWarning)
+except ImportError:
+    pass
+
 # for NVIDIA Guardrails
 from nemoguardrails import RailsConfig, LLMRails
+from nemoguardrails.tracing.adapters.opentelemetry import OpenTelemetryAdapter
+from nemoguardrails.tracing.adapters.registry import register_log_adapter
+from nemoguardrails.tracing.spans import SpanKind as GuardrailsSpanKind
 
 # for OpenTelemetry and Dynatrace Traceloop
+from opentelemetry import context as otel_context
 from opentelemetry import trace
 from traceloop.sdk import Traceloop
+from traceloop.sdk.instruments import Instruments
 
 # ------------------------------------------------------------------------------
 # constants
@@ -73,11 +87,26 @@ def initialize_traceloop():
         return
 
     log("✓ Initializing Traceloop SDK...")
+    # Pod identity (downward API env vars in deploy/k8s/app.yaml) so traces from concurrent
+    # processes in the same pod, or different pods, can be told apart.
+    pod_name = os.getenv("POD_NAME")
+    resource_attributes = {
+        key: value for key, value in {
+            "k8s.pod.name": pod_name,
+            "service.instance.id": pod_name,
+            "k8s.namespace.name": os.getenv("POD_NAMESPACE"),
+        }.items() if value
+    }
     Traceloop.init(
         app_name=SERVICE_NAME,
         api_endpoint=os.environ.get('OTEL_OTLP_ENDPOINT', 'http://localhost:4318'),
         disable_batch=True,
         should_enrich_metrics=True,
+        resource_attributes=resource_attributes,
+        # Traceloop's SQLAlchemy instrumentor is gated by Instruments.PYMYSQL. This app makes no
+        # SQL calls and the installed sqlalchemy is newer than the instrumentor supports, which
+        # logs "DependencyConflict" at startup.
+        block_instruments={Instruments.PYMYSQL},
     )
     log("✓ Traceloop SDK initialized with: "+ os.environ.get('OTEL_OTLP_ENDPOINT', 'http://localhost:4318'))
     
@@ -125,11 +154,31 @@ def ensure_config_files_exist():
 # ------------------------------------------------------------------------------
 # guardrail functions
 # ------------------------------------------------------------------------------
+class InternalKindOpenTelemetryAdapter(OpenTelemetryAdapter):
+    """NeMo Guardrails OpenTelemetry adapter that emits the top-level guardrails.request span as INTERNAL.
+
+    NeMo marks that span SERVER, so Dynatrace treats every guardrails call as an extra incoming
+    request next to the app's own "prompt" span. INTERNAL keeps "prompt" as the only request root.
+    """
+
+    def _create_span(self, span_data, *args, **kwargs):
+        if span_data.span_kind == GuardrailsSpanKind.SERVER:
+            span_data.span_kind = GuardrailsSpanKind.INTERNAL
+        return super()._create_span(span_data, *args, **kwargs)
+
+# adapter name referenced by tracing.adapters in guardrails_config/config.yml.*
+GUARDRAILS_OTEL_ADAPTER = "OpenTelemetryInternal"
+
 @st.cache_resource(show_spinner="Configuring guardrails...")
 def initialize_guardrails():
     """Initialize guardrails configuration once (cached to prevent re-initialization on every Streamlit rerun)."""
     log("✓ Initializing guardrails configuration...")
     try:
+        try:
+            register_log_adapter(InternalKindOpenTelemetryAdapter, GUARDRAILS_OTEL_ADAPTER)
+        except ValueError:
+            pass  # already registered (Streamlit re-runs this script inside the same process)
+
         # Load guardrails configuration
         guardrails_path = Path(__file__).parent / "guardrails_config"
         
@@ -171,6 +220,19 @@ def initialize_guardrails():
         log(f"❌ Error initializing guardrails: {e}")
         return None
 
+def _rails_only_content(result) -> str:
+    """Return the message text from a rails-only generate_async() result.
+
+    With options={"rails": [...]} NeMo Guardrails does not call the main LLM. It echoes
+    the checked message when every rail passes, or returns the refusal text when a rail blocks.
+    """
+    response = getattr(result, "response", result)
+    if isinstance(response, list):
+        response = response[-1] if response else {}
+    if isinstance(response, dict):
+        return str(response.get("content", ""))
+    return str(response)
+
 async def check_input_guardrails(rails, user_input):
     """Apply input guardrails and return (is_safe, message).
 
@@ -198,31 +260,22 @@ async def check_input_guardrails(rails, user_input):
     guardrail_timeout = int(os.getenv("GUARDRAIL_TIMEOUT_SECONDS", "30"))
     try:
         start_time = time.time()
+        # Input rails only: runs content safety / topic control (small NIMs) and skips the
+        # main-LLM reply generation and output rails that a default call would also run.
         input_result = await asyncio.wait_for(
-            rails.generate_async(messages=[{"role": "user", "content": user_input}]),
+            rails.generate_async(
+                messages=[{"role": "user", "content": user_input}],
+                options={"rails": ["input"]},
+            ),
             timeout=guardrail_timeout,
         )
         duration = time.time() - start_time
         log(f"⏱️  Input guardrail (LLM content safety) execution time: {duration:.2f} seconds")
 
-        def _is_blocked(content: str) -> bool:
-            return any(phrase in content.lower() for phrase in
-                       ["i'm sorry", "i can't", "i cannot", "please ask", "i can only"])
-
-        if hasattr(input_result, 'response') and isinstance(input_result.response, list):
-            if input_result.response:
-                content = input_result.response[-1].get('content', '')
-                if _is_blocked(content):
-                    log("🚫 Input blocked by: LLM Content Safety")
-                    return False, f"**LLM Content Safety** — {refusal}"
-        elif isinstance(input_result, dict):
-            content = input_result.get('content', '')
-            if _is_blocked(content):
-                log("🚫 Input blocked by: LLM Content Safety")
-                return False, f"**LLM Content Safety** — {refusal}"
-        elif hasattr(input_result, 'is_stop') and input_result.is_stop:
+        # Rails-only echoes the input when it passes; anything else is a rail's refusal.
+        if _rails_only_content(input_result).strip() != user_input.strip():
             log("🚫 Input blocked by: LLM Content Safety")
-            return False, f"**LLM Content Safety** — {input_result.return_value}"
+            return False, f"**LLM Content Safety** — {refusal}"
 
         return True, "Input passed guardrails"
     except asyncio.TimeoutError:
@@ -239,35 +292,27 @@ async def check_output_guardrails(rails, user_input, workflow_result):
     guardrail_timeout = int(os.getenv("GUARDRAIL_TIMEOUT_SECONDS", "30"))
     try:
         start_time = time.time()
+        # Output rails only, applied to the real workflow answer. A default call would
+        # regenerate a reply with the main LLM and check that instead of the answer.
         output_result = await asyncio.wait_for(
             rails.generate_async(
                 messages=[
                     {"role": "user", "content": user_input},
                     {"role": "assistant", "content": workflow_result}
-                ]
+                ],
+                options={"rails": ["output"]},
             ),
             timeout=guardrail_timeout,
         )
         end_time = time.time()
         duration = end_time - start_time
         log(f"⏱️  Output guardrail execution time: {duration:.2f} seconds")
-        
-        # Check if output was blocked
-        # Handle GenerationResponse objects (from NeMo Guardrails)
-        if hasattr(output_result, 'response') and isinstance(output_result.response, list):
-            # Extract content from GenerationResponse
-            if output_result.response:
-                content = output_result.response[-1].get('content', '')
-                if any(phrase in content.lower() for phrase in ["i can only", "please ask questions", "i'm sorry", "i cannot"]):
-                    return False, content
-        elif isinstance(output_result, dict):
-            content = output_result.get('content', '')
-            # Fixed: Added "i cannot" to match GenerationResponse branch for consistency
-            if any(phrase in content.lower() for phrase in ["i can only", "please ask questions", "i'm sorry", "i cannot"]):
-                return False, content
-        elif hasattr(output_result, 'is_stop') and output_result.is_stop:
-            return False, output_result.return_value
-        
+
+        # Rails-only echoes the answer when it passes; anything else is a rail's refusal.
+        content = _rails_only_content(output_result)
+        if content.strip() != str(workflow_result).strip():
+            return False, content
+
         return True, "Output passed guardrails"
     except asyncio.TimeoutError:
         log(f"⚠️  Output guardrail timed out after {guardrail_timeout}s — passing output through")
@@ -326,6 +371,10 @@ async def run_nat_workflow(user_input, nat_config_path):
 async def process_query(user_input, user_option_guardrail, rails, nat_config_path, status_text=None):
     """Main processing function that coordinates all steps."""
     log(f"Processing {user_option_guardrail} query: {user_input}")
+    # The "prompt" span (and its request id properties) is current here. Remember it: the LangChain
+    # instrumentation can leave a finished task span attached after the workflow returns, which
+    # would otherwise become the parent of the output guardrails spans.
+    prompt_context = otel_context.get_current()
     results = {
         "input_safe": False,
         "input_message": "",
@@ -363,9 +412,13 @@ async def process_query(user_input, user_option_guardrail, rails, nat_config_pat
     # Step 3: Output guardrails
     if user_option_guardrail == OPTION_WITH_GUARDRAILS:
         status_text.text("⚡ Running Output guardrails...")
-        results["output_safe"], results["output_message"] = await check_output_guardrails(
-            rails, user_input, results["workflow_result"]
-        )
+        context_token = otel_context.attach(prompt_context)
+        try:
+            results["output_safe"], results["output_message"] = await check_output_guardrails(
+                rails, user_input, results["workflow_result"]
+            )
+        finally:
+            otel_context.detach(context_token)
         if results["output_safe"]:
             results["final_result"] = results["workflow_result"]
     else:
@@ -490,6 +543,20 @@ def main():
             else:
                 with st.spinner("🔄 Processing your query..."):
                     with trace.get_tracer(SERVICE_NAME).start_as_current_span(name="prompt", kind=trace.SpanKind.SERVER) as span:
+                        # Unique ids to find this request's trace by more than a timestamp.
+                        # app.test.run.id is set by smoke.py (TEST_RUN_ID) to group its runs.
+                        request_attributes = {
+                            "app.request.id": uuid.uuid4().hex,
+                            "app.guardrails.enabled": user_option_guardrail == OPTION_WITH_GUARDRAILS,
+                        }
+                        if os.getenv("TEST_RUN_ID"):
+                            request_attributes["app.test.run.id"] = os.environ["TEST_RUN_ID"]
+                        for key, value in request_attributes.items():
+                            span.set_attribute(key, value)
+                        # Also stamps the same ids on the child spans (traceloop.association.properties.*)
+                        Traceloop.set_association_properties(request_attributes)
+                        log(f"Request {request_attributes['app.request.id']} trace.id={span.get_span_context().trace_id:032x}")
+
                         # Create progress indicators
                         progress_bar = st.progress(50)
                         status_text = st.empty()

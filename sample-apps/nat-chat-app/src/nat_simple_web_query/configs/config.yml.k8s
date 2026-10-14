@@ -1,12 +1,6 @@
-# Enable the exporting of traces via OpenTelemetry
-general:
-  telemetry:
-    tracing:
-      otelcollector:
-        _type: otelcollector
-        # The endpoint where you have deployed the otel collector
-        endpoint: "${OTEL_OTLP_ENDPOINT:-http://localhost:4318}/v1/traces"
-        project: nat_workflow
+# NAT's own otelcollector trace exporter is intentionally not configured here. The app already traces
+# the NAT workflow through Traceloop (app.py); a second NAT exporter creates a separate, unlinked
+# "<workflow>" trace per prompt plus extra POSTs to the collector.
 
 function_groups:
   internet_search:
@@ -35,4 +29,9 @@ workflow:
   tool_names: [internet_search__search, current_datetime]
   llm_name: nim_llm
   verbose: false
-  parse_agent_response_max_retries: 3
+  # Each extra ReAct iteration is another ~6-12 s 70B call that re-sends the growing context.
+  parse_agent_response_max_retries: 1
+  max_tool_calls: 3
+  additional_instructions: |
+    Call internet_search__search at most once, with max_results of 2 or less, then answer from its result.
+    Pass the tool input as a plain JSON object with no markdown code fences.

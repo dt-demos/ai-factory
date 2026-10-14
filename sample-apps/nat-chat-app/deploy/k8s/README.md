@@ -93,6 +93,46 @@ If `EXTERNAL-IP` stays `<pending>` (no load balancer in the cluster), port-forwa
 kubectl -n nim port-forward svc/nat-chat-app 8501:80
 ```
 
+## 7. Smoke test
+
+[`smoke.py`](smoke.py) asks one question with and without NeMo Guardrails and exits non-zero if either run fails. Run it from a machine with `kubectl` access:
+
+```bash
+./smoke.sh
+```
+
+[`smoke.sh`](smoke.sh) is a wrapper for this command (copy `smoke.py` to another machine and run the command there if you prefer):
+
+```bash
+kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < smoke.py
+```
+
+Arguments go through to `smoke.py`. For example, one mode with your own question:
+
+```bash
+./smoke.sh "What is Dynatrace?" --mode with
+```
+
+`--mode` is `with`, `without` or `both` (the default).
+
+**How it works.** `kubectl exec` starts a new `python` process inside the app's running pod, and `-` makes Python read the script from stdin, so the file on your machine is sent to the pod and nothing is built or copied into the image. The script uses Streamlit's `AppTest` to load `/app/app.py` from the pod's working directory and fill in the page headlessly (no browser, no web server). That means:
+
+* It tests whatever image the pod is running. After you change the code, build and push a new image and roll it out first.
+* It runs the real app code with the pod's environment: the ConfigMap and Secret, the NIM services and the collector.
+* It is a separate process from the Streamlit server, so it starts its own tracing, guardrails and NAT workflow, and its logs and traces are not mixed with a browser session's. The traces still use the same service name, `nat-chat-app`.
+
+**Finding the traces.** Each run prints a `TEST_RUN_ID`, which the app adds to the traces as `app.test.run.id`. Use it to find a run by more than its timestamp:
+
+```
+fetch spans, from:now()-1h
+| filter app.test.run.id == "<TEST_RUN_ID>"
+| fields trace.id, app.request.id, app.guardrails.enabled, start_time, duration
+```
+
+Every prompt also gets its own `app.request.id` (including prompts typed in the browser), and the pod name is on the trace as `k8s.pod.name`. To see a whole trace, filter on its `trace.id`.
+
+Expect two traces per run of `smoke.py` (one per mode), each with a single request root (the `prompt` span).
+
 ## Troubleshooting
 
 * **`ErrImagePull` or `ImagePullBackOff`:** the tag in `app.yaml` doesn't exist in the registry, or the repository is private and needs an `imagePullSecret` (step 3).

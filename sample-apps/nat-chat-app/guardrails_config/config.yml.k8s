@@ -38,6 +38,8 @@ instructions:
 # Enable input and output rail checks
 rails:
   input:
+    # Run the input checks concurrently (content safety and topic control are independent NIM calls)
+    parallel: true
     flows:
       - check_jailbreak
       - check_blocked_terms
@@ -60,4 +62,6 @@ rails:
 tracing:
   enabled: true
   adapters:
-    - name: OpenTelemetry
+    # Registered in app.py: the built-in OpenTelemetry adapter, but with guardrails.request as an
+    # INTERNAL span (NeMo marks it SERVER, which counts every guardrails call as a separate request).
+    - name: OpenTelemetryInternal
