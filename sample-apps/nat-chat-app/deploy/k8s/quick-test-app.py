@@ -1,9 +1,9 @@
-"""Smoke test for the deployed chat app: asks one question with and without NeMo Guardrails.
+"""Quick test of the deployed chat app: asks one question with and without NeMo Guardrails.
 
-Run it inside the running app pod (see deploy/k8s/README.md, "Smoke test"):
+Run it inside the running app pod (see deploy/k8s/README.md, "Quick test"):
 
-    kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < smoke.py
-    kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - "Your question" --mode with < smoke.py
+    kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < quick-test-app.py
+    kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - "Your question" --mode with < quick-test-app.py
 
 It uses Streamlit's AppTest to load app.py from the pod's working directory (/app) and drive the
 page headlessly: type the question, pick the guardrails option, click Submit. No browser or web

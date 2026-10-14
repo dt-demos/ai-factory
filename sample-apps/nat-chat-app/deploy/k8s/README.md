@@ -96,24 +96,24 @@ If `EXTERNAL-IP` stays `<pending>` (no load balancer in the cluster), port-forwa
 kubectl -n nim port-forward svc/nat-chat-app 8501:80
 ```
 
-## 7. Smoke test
+## 7. Quick test
 
-[`smoke.py`](smoke.py) asks one question with and without NeMo Guardrails and exits non-zero if either run fails. Run it from a machine with `kubectl` access:
+[`quick-test-app.py`](quick-test-app.py) asks one question with and without NeMo Guardrails and exits non-zero if either run fails. Run it from a machine with `kubectl` access:
 
 ```bash
-./smoke.sh
+./quick-test-app.sh
 ```
 
-[`smoke.sh`](smoke.sh) is a wrapper for this command (copy `smoke.py` to another machine and run the command there if you prefer):
+[`quick-test-app.sh`](quick-test-app.sh) is a wrapper for this command (copy `quick-test-app.py` to another machine and run the command there if you prefer):
 
 ```bash
-kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < smoke.py
+kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < quick-test-app.py
 ```
 
-Arguments go through to `smoke.py`. For example, one mode with your own question:
+Arguments go through to `quick-test-app.py`. For example, one mode with your own question:
 
 ```bash
-./smoke.sh "What is Dynatrace?" --mode with
+./quick-test-app.sh "What is Dynatrace?" --mode with
 ```
 
 `--mode` is `with`, `without` or `both` (the default).
@@ -134,7 +134,7 @@ fetch spans, from:now()-1h
 
 Every prompt also gets its own `app.request.id` (including prompts typed in the browser), and the pod name is on the trace as `k8s.pod.name`. To see a whole trace, filter on its `trace.id`.
 
-Expect two traces per run of `smoke.py` (one per mode), each with a single request root (the `prompt` span).
+Expect two traces per run of `quick-test-app.py` (one per mode), each with a single request root (the `prompt` span).
 
 ## 8. Continuous load
 
@@ -149,7 +149,7 @@ cd loadgen
 ./loadgen.sh delete     # remove it
 ```
 
-**How it works.** It runs as its own pod (`nat-chat-loadgen`) from the same image the app is running, with the app's ConfigMap and Secret. Instead of Streamlit it runs [`loadgen.py`](loadgen/loadgen.py), which drives `app.py` headlessly like `smoke.py` does and submits one prompt at a time after a random delay. The script and [`prompts.yaml`](loadgen/prompts.yaml) are mounted from a ConfigMap, so changing the prompts or settings doesn't need a new image: edit the file and run `./loadgen.sh start` again.
+**How it works.** It runs as its own pod (`nat-chat-loadgen`) from the same image the app is running, with the app's ConfigMap and Secret. Instead of Streamlit it runs [`loadgen.py`](loadgen/loadgen.py), which drives `app.py` headlessly like `quick-test-app.py` does and submits one prompt at a time after a random delay. The script and [`prompts.yaml`](loadgen/prompts.yaml) are mounted from a ConfigMap, so changing the prompts or settings doesn't need a new image: edit the file and run `./loadgen.sh start` again.
 
 **The mix.** The prompts come from [PROMPTS.md](../../PROMPTS.md). By default about 45% should be blocked (spread over jailbreak, blocked terms, politics, input length, LLM content safety and topic control), 35% are valid with guardrails and 20% are valid without. Each prompt has an expected outcome. The generator works out what the app actually did and logs `"match": false` when it differs, so `./loadgen.sh status` also shows where the guardrails or the document disagree with the code. `./loadgen.sh start` is also how you change settings, and they reset to the defaults unless you pass them again:
 

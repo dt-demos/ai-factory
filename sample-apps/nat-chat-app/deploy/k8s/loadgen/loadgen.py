@@ -2,7 +2,7 @@
 answered and questions that the guardrails should block.
 
 It runs inside a pod that uses the app image (see loadgen.yaml and loadgen.sh), loads app.py with
-Streamlit's AppTest like smoke.py does, and submits one prompt at a time. Each prompt carries an
+Streamlit's AppTest like quick-test-app.py does, and submits one prompt at a time. Each prompt carries an
 expected outcome (prompts.yaml). The generator works out what the app actually did from the page
 and logs a line per prompt, flagging any that differ from what was expected.
 
