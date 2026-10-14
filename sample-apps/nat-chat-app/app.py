@@ -7,6 +7,7 @@ import io
 import logging
 import warnings
 import os
+import re
 import sys
 import time
 import uuid
@@ -373,6 +374,26 @@ async def run_nat_workflow(user_input, nat_config_path):
 # ------------------------------------------------------------------------------
 # Main functions
 # ------------------------------------------------------------------------------
+def describe_outcome(results):
+    """Summarize a process_query() result as (app.outcome, app.blocked_by) for the prompt span.
+
+    The Python guardrail checks run outside NeMo Guardrails and leave no spans of their own, so
+    without this a prompt they block looks like any other request that did no work.
+    """
+    if not results["input_safe"]:
+        message = results["input_message"]
+        if message.startswith("Error checking input"):
+            return "guardrail_error", None
+        match = re.search(r"\*\*(.+?)\*\*", message)  # "**Politics Filter** — I'm sorry..."
+        return "blocked_input", match.group(1) if match else "unknown"
+    if not results["workflow_success"]:
+        return "workflow_error", None
+    if not results["output_safe"]:
+        if results["output_message"].startswith("Error checking output"):
+            return "guardrail_error", None
+        return "blocked_output", "Output Guardrails"
+    return "passed", None
+
 async def process_query(user_input, user_option_guardrail, rails, nat_config_path, status_text=None):
     """Main processing function that coordinates all steps."""
     log(f"Processing {user_option_guardrail} query: {user_input}")
@@ -549,13 +570,16 @@ def main():
                 with st.spinner("🔄 Processing your query..."):
                     with trace.get_tracer(SERVICE_NAME).start_as_current_span(name="prompt", kind=trace.SpanKind.SERVER) as span:
                         # Unique ids to find this request's trace by more than a timestamp.
-                        # app.test.run.id is set by smoke.py (TEST_RUN_ID) to group its runs.
+                        # app.test.run.id (TEST_RUN_ID) groups the runs of smoke.py and loadgen, and
+                        # app.test.category (TEST_CATEGORY) says which kind of prompt loadgen sent.
                         request_attributes = {
                             "app.request.id": uuid.uuid4().hex,
                             "app.guardrails.enabled": user_option_guardrail == OPTION_WITH_GUARDRAILS,
                         }
                         if os.getenv("TEST_RUN_ID"):
                             request_attributes["app.test.run.id"] = os.environ["TEST_RUN_ID"]
+                        if os.getenv("TEST_CATEGORY"):
+                            request_attributes["app.test.category"] = os.environ["TEST_CATEGORY"]
                         for key, value in request_attributes.items():
                             span.set_attribute(key, value)
                         # Also stamps the same ids on the child spans (traceloop.association.properties.*)
@@ -577,7 +601,13 @@ def main():
                         asyncio.set_event_loop(loop)
                         results = loop.run_until_complete(process_query(user_input, user_option_guardrail, rails, Path(nat_config_path), status_text=status_text))
                         loop.close()
-                        
+
+                        # What happened to the prompt, and which guardrail stopped it if one did.
+                        outcome, blocked_by = describe_outcome(results)
+                        span.set_attribute("app.outcome", outcome)
+                        if blocked_by:
+                            span.set_attribute("app.blocked_by", blocked_by)
+
                         # Update progress
                         progress_bar.progress(100)
                         status_text.empty()

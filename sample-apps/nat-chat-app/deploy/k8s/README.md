@@ -133,6 +133,46 @@ Every prompt also gets its own `app.request.id` (including prompts typed in the 
 
 Expect two traces per run of `smoke.py` (one per mode), each with a single request root (the `prompt` span).
 
+## 8. Continuous load
+
+[`loadgen/`](loadgen/) keeps a steady stream of prompts going, a mix of questions that should be answered and questions the guardrails should block. It is useful for filling dashboards and for checking the guardrails over time.
+
+```bash
+cd loadgen
+./loadgen.sh start      # create the ConfigMap and Deployment, begin sending prompts
+./loadgen.sh status     # pod, latest summary, any unexpected results
+./loadgen.sh logs       # follow the log, one JSON line per prompt
+./loadgen.sh stop       # pause; `start` resumes
+./loadgen.sh delete     # remove it
+```
+
+**How it works.** It runs as its own pod (`nat-chat-loadgen`) from the same image the app is running, with the app's ConfigMap and Secret. Instead of Streamlit it runs [`loadgen.py`](loadgen/loadgen.py), which drives `app.py` headlessly like `smoke.py` does and submits one prompt at a time after a random delay. The script and [`prompts.yaml`](loadgen/prompts.yaml) are mounted from a ConfigMap, so changing the prompts or settings doesn't need a new image: edit the file and run `./loadgen.sh start` again.
+
+**The mix.** The prompts come from [PROMPTS.md](../../PROMPTS.md). By default about 45% should be blocked (spread over jailbreak, blocked terms, politics, input length, LLM content safety and topic control), 35% are valid with guardrails and 20% are valid without. Each prompt has an expected outcome. The generator works out what the app actually did and logs `"match": false` when it differs, so `./loadgen.sh status` also shows where the guardrails or the document disagree with the code. `./loadgen.sh start` is also how you change settings, and they reset to the defaults unless you pass them again:
+
+```bash
+LOADGEN_DELAY_MIN=30 LOADGEN_DELAY_MAX=90 ./loadgen.sh start                          # faster
+LOADGEN_WEIGHTS="valid_with_guardrails=0,valid_without_guardrails=0" ./loadgen.sh start  # blocked prompts only, no web searches
+```
+
+Before starting you can see the plan and the estimated rate on your own machine with `python3 loadgen/loadgen.py --list` (needs PyYAML and Streamlit).
+
+**Cost.** At the default delay of 60-180 s, about 28 prompts an hour are sent. Every prompt that should be answered makes one web search (Tavily, about 15 an hour, 365 a day) and two 70B calls, each taking 15-25 s. Check your Tavily plan, and expect real users to share the GPU. Blocked prompts are nearly free.
+
+**Finding the traffic in Dynatrace.** Every generated prompt has `app.test.run.id = "loadgen:<category>"` and `app.test.category = "<category>"`, and the log line has the `request_id` and `trace_id`. The app records what happened to every prompt (generated or not) on the `prompt` span as `app.outcome` (`passed`, `blocked_input`, `blocked_output`, `workflow_error` or `guardrail_error`) and, when a guardrail stopped it, `app.blocked_by` (for example `Politics Filter`):
+
+```
+fetch spans, from:now()-1h
+| filter startsWith(app.test.run.id, "loadgen:") and span.name == "prompt"
+| summarize prompts = count(), avg_seconds = avg(duration) / 1000000000.0,
+    by: { app.test.category, app.outcome, app.blocked_by }
+| sort prompts desc
+```
+
+Prompts blocked by the Python checks (jailbreak, blocked terms, politics, length) have no guardrail child spans, because those checks run outside NeMo Guardrails, so `app.outcome` and `app.blocked_by` on the `prompt` span are how you see them. This needs image 0.7 or later. The LLM-based blocks also produce guardrail spans.
+
+The process exits after `LOADGEN_MAX_ITERATIONS` (200) prompts and Kubernetes restarts it, so a slow memory leak can't build up.
+
 ## Troubleshooting
 
 * **`ErrImagePull` or `ImagePullBackOff`:** the tag in `app.yaml` doesn't exist in the registry, or the repository is private and needs an `imagePullSecret` (step 3).

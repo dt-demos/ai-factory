@@ -1,0 +1,83 @@
+# Continuous prompt generator for nat-chat-app. Use loadgen.sh rather than applying this directly:
+# it creates the nat-chat-loadgen ConfigMap (loadgen.py and prompts.yaml) and fills in __IMAGE__
+# with the image the app is running.
+#
+# The pod uses the app image, the app's ConfigMap and Secret (app.yaml), and runs loadgen.py instead
+# of Streamlit. Settings are the LOADGEN_* variables below (see loadgen.py).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nat-chat-loadgen
+  namespace: nim
+  labels:
+    app: nat-chat-loadgen
+spec:
+  replicas: 1
+  # Never run two generators side by side while rolling out.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: nat-chat-loadgen
+  template:
+    metadata:
+      labels:
+        app: nat-chat-loadgen
+    spec:
+      # A prompt can be mid-flight (up to about 30 s) when the pod is asked to stop.
+      terminationGracePeriodSeconds: 60
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: loadgen
+          image: __IMAGE__
+          imagePullPolicy: IfNotPresent
+          workingDir: /app
+          # Overriding the command skips docker-entrypoint.sh, so create the active config.yml
+          # files the same way it does before starting.
+          command:
+            - /bin/sh
+            - -c
+            - python update_config.py "${CONFIG_TYPE:-k8s}" && exec python /loadgen/loadgen.py
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Seconds between prompts, random in this range. Each prompt that should be answered
+            # makes one web search (Tavily) and two 70B calls.
+            - name: LOADGEN_DELAY_MIN
+              value: "60"
+            - name: LOADGEN_DELAY_MAX
+              value: "180"
+            # Exit after this many prompts so the pod restarts with a clean process (0 = never).
+            - name: LOADGEN_MAX_ITERATIONS
+              value: "200"
+            # Optional category weights, e.g. "valid_with_guardrails=0,valid_without_guardrails=0"
+            # to send only prompts that should be blocked (no web searches).
+            - name: LOADGEN_WEIGHTS
+              value: ""
+          volumeMounts:
+            - name: loadgen
+              mountPath: /loadgen
+              readOnly: true
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+      volumes:
+        - name: loadgen
+          configMap:
+            name: nat-chat-loadgen
