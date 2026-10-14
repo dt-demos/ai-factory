@@ -361,6 +361,11 @@ async def run_nat_workflow(user_input, nat_config_path):
         return True, result_str
     except Exception as e:
         error_msg = str(e)
+        if "Failed to parse agent output" in error_msg:
+            # The ReAct agent got a reply it could not parse (for example "Thought:" with no Action),
+            # which is not a safety refusal.
+            log(f"⚠️  NAT agent output could not be parsed: {error_msg[:300]}")
+            return False, "The AI agent returned a response it could not parse. Please try again."
         if "list index out of range" in error_msg or "Failed to parse" in error_msg:
             return False, "Request was refused by the AI model for safety reasons"
         return False, f"Error: {error_msg}"

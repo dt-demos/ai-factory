@@ -30,7 +30,8 @@ workflow:
   llm_name: nim_llm
   verbose: false
   # Each extra ReAct iteration is another ~6-12 s 70B call that re-sends the growing context.
-  parse_agent_response_max_retries: 1
+  # One retry (2) lets the agent recover when the model answers "Thought:" without an Action or Final Answer.
+  parse_agent_response_max_retries: 2
   max_tool_calls: 3
   additional_instructions: |
     Call internet_search__search at most once, with max_results of 2 or less, then answer from its result.
