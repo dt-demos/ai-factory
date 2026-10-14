@@ -9,11 +9,11 @@ The app runs on your machine and calls the models on the NVIDIA cloud APIs (`CON
 * Python 3.11 or Docker
 * Optional, for traces in Dynatrace: a Dynatrace environment and API token (see [OTel Collector](#optional-otel-collector))
 
-Create your `.env` file in the app root, then fill in your keys:
+Create your `.env` file in the app root, then uncomment the LOCAL section and fill in your keys:
 
 ```bash
 cd sample-apps/nat-chat-app
-cp deploy/local/.env.template .env
+cp .env.template .env
 ```
 
 ## Option A: Python
@@ -37,7 +37,7 @@ streamlit run app.py
 Use the published image, or build your own (see [Building and pushing the image](../../README.md#building-and-pushing-the-image)). Run from the app root, where `.env` is:
 
 ```bash
-export IMAGE=docker.io/dtdemos/nat-chat-app:0.1
+export IMAGE=docker.io/dtdemos/nat-chat-app:0.7
 ```
 
 Run detached:

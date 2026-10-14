@@ -35,6 +35,8 @@ This diagram below depicts the setup consisting of:
 
 # Running the App
 
+Both paths read their settings from `.env` in this directory. Copy [.env.template](.env.template) to `.env` and uncomment the LOCAL or CLOUD section.
+
 Choose a path based on where the app runs and where the models are:
 
 | App runs on | Models | Profile (`CONFIG_TYPE`) | Guide |

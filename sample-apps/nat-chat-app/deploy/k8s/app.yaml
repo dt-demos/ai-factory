@@ -1,17 +1,4 @@
 # ---------------------------------------------------------------------------
-# Secret — sensitive credentials (fill in before applying)
-# ---------------------------------------------------------------------------
-apiVersion: v1
-kind: Secret
-metadata:
-  name: app-secrets
-  namespace: nim
-type: Opaque
-stringData:
-  # Required for web search (Tavily)
-  TAVILY_API_KEY: "<your-tavily-api-key>"
----
-# ---------------------------------------------------------------------------
 # ConfigMap — non-sensitive runtime configuration
 # ---------------------------------------------------------------------------
 apiVersion: v1

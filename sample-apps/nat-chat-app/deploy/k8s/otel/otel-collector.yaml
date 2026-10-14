@@ -41,7 +41,7 @@ subjects:
     name: dynatrace-otel-collector
     namespace: nim
 ---
-# Used by the k8sattributes processor in otel/config-enriched.yaml
+# Used by the k8sattributes processor in otel/config.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

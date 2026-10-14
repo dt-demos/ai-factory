@@ -6,9 +6,15 @@ The app runs as a pod and calls NIM services in the same cluster (`CONFIG_TYPE=k
 |---|---|
 | `test-nim-endpoints.sh` | Checks every NIM model (prompt and metrics) and the DCGM GPU metrics from inside the cluster |
 | `otel/otel-collector.yaml` | Dynatrace OTel Collector ServiceAccount, RBAC, Deployment and Service ([raw manifest approach](https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector/deployment#kubernetes--raw-manifest)) |
-| `otel/config.yaml` | Collector config: OTLP receiver, plus Prometheus scraping of the NIMs and DCGM |
+| `otel/config.yaml` | Collector config: OTLP receiver, Prometheus scraping of the NIMs and DCGM, and Kubernetes enrichment of the telemetry |
 | `deploy-otel-collector.sh` | Creates the Dynatrace secret and the collector ConfigMap (from `otel/config.yaml`), then applies `otel/otel-collector.yaml` |
-| `app.yaml` | Chat app: Secret, ConfigMap, Deployment and LoadBalancer Service |
+| `app.yaml` | Chat app: ConfigMap, Deployment and LoadBalancer Service |
+| `load-env.sh` | Sourced by the deploy scripts to load `sample-apps/nat-chat-app/.env` |
+| `deploy-app.sh` | Creates the `app-secrets` Secret from `TAVILY_API_KEY`, then applies `app.yaml` |
+
+## Configuration file
+
+`deploy-app.sh`, `deploy-otel-collector.sh` and `loadgen/loadgen.sh` read their settings from `sample-apps/nat-chat-app/.env`, which is gitignored. Copy `.env.template` to `.env` to start. Values in the file override variables already set in your shell. Uncomment the CLOUD section of the template and fill in `TAVILY_API_KEY`, `DT_BASE_URL` and `DT_API_TOKEN` (scopes: `openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`).
 
 ## 1. Check the NIM models
 
@@ -40,9 +46,7 @@ The collector receives OTLP from the app on `dynatrace-otel-collector.nim:4317/4
 | nv-embedqa-e5-v5 | `embedqa-e5-v5.nim-service:8000` | `/v1/metrics` |
 
 ```bash
-export DT_BASE_URL=https://<tenant>.live.dynatrace.com
-export DT_API_TOKEN=<token>   # scopes: openTelemetryTrace.ingest, metrics.ingest, logs.ingest
-
+# Set DT_BASE_URL and DT_API_TOKEN in sample-apps/nat-chat-app/.env (see "Configuration file" above)
 ./deploy-otel-collector.sh apply    # also creates the nim namespace if needed
 ./deploy-otel-collector.sh status
 ```
@@ -58,15 +62,15 @@ timeseries avg(DCGM_FI_DEV_GPU_UTIL), by: { Hostname, gpu }
 
 ## 3. Publish the app image
 
-Follow [Building and pushing the image](../../README.md#building-and-pushing-the-image) in the app README. Then set the new tag in `image:` in `app.yaml`. It's currently `docker.io/dtdemos/nat-chat-app:0.1`.
+Follow [Building and pushing the image](../../README.md#building-and-pushing-the-image) in the app README. Then set the new tag in `image:` in `app.yaml`. It's currently `docker.io/dtdemos/nat-chat-app:0.7`.
 
 ## 4. Set the configuration
 
-Edit `app.yaml` before you apply it, and don't commit real keys:
+Set `TAVILY_API_KEY` in `sample-apps/nat-chat-app/.env`. `deploy-app.sh` stores it in the `app-secrets` Secret, so it never goes in `app.yaml`. Edit the other settings in `app.yaml` before you apply it.
 
 | Setting | Where | Value |
 |---|---|---|
-| `TAVILY_API_KEY` | Secret `app-secrets` | Your Tavily key |
+| `TAVILY_API_KEY` | Secret `app-secrets` | Environment variable, set by `deploy-app.sh` |
 | `CONFIG_TYPE` | ConfigMap `app-config` | `k8s` |
 | `OTEL_OTLP_ENDPOINT` | ConfigMap `app-config` | `http://dynatrace-otel-collector.nim.svc.cluster.local:4318` |
 | `SERVICE_NAME_SUFFIX` | ConfigMap `app-config` | Optional. Appended to the service name (`nat-chat-app-<suffix>`) if desired |
@@ -74,8 +78,7 @@ Edit `app.yaml` before you apply it, and don't commit real keys:
 ## 5. Deploy the app
 
 ```bash
-kubectl apply -f app.yaml
-kubectl -n nim rollout status deployment nat-chat-app
+./deploy-app.sh apply
 kubectl -n nim logs deploy/nat-chat-app | head -20   # look for "Generating config for type: k8s"
 ```
 
@@ -184,6 +187,6 @@ The process exits after `LOADGEN_MAX_ITERATIONS` (200) prompts and Kubernetes re
 ## Remove
 
 ```bash
-kubectl delete -f app.yaml
+./deploy-app.sh delete
 ./deploy-otel-collector.sh delete
 ```

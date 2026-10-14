@@ -3,9 +3,9 @@
 # approach, with otel/config.yaml as the collector config.
 #
 # Usage:
-#   export DT_BASE_URL=https://<tenant>.live.dynatrace.com
-#   export DT_API_TOKEN=<token with openTelemetryTrace.ingest, metrics.ingest, logs.ingest>
-#   ENRICHED=1 ./deploy-otel-collector.sh apply   # use config-enriched.yaml
+#   Set these in sample-apps/nat-chat-app/.env (or export them):
+#     DT_BASE_URL=https://<tenant>.live.dynatrace.com
+#     DT_API_TOKEN=<token with openTelemetryTrace.ingest, metrics.ingest, logs.ingest>
 #   ./deploy-otel-collector.sh apply    # create/update secret, configmap, deployment
 #   ./deploy-otel-collector.sh status   # pod status + recent logs
 #   ./deploy-otel-collector.sh delete   # remove everything
@@ -13,14 +13,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/load-env.sh"
 NAMESPACE=nim
-# Default: plain config. Set ENRICHED=1 to use otel/config-enriched.yaml
-# (adds k8sattributes + transform for Kubernetes enrichment).
-if [ "${ENRICHED:-0}" = "1" ]; then
-  CONFIG_FILE="$SCRIPT_DIR/otel/config-enriched.yaml"
-else
-  CONFIG_FILE="$SCRIPT_DIR/otel/config.yaml"
-fi
+CONFIG_FILE="$SCRIPT_DIR/otel/config.yaml"
 SECRET=dynatrace-otelcol-dt-api-credentials
 CONFIGMAP=dynatrace-otel-collector-config
 DEPLOYMENT=dynatrace-otel-collector

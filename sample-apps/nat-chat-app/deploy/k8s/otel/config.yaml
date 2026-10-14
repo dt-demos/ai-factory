@@ -49,6 +49,75 @@ receivers:
 processors:
   cumulativetodelta:
     max_staleness: 25h
+  # Kubernetes enrichment for OTLP data
+  # https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector/use-cases/kubernetes/k8s-enrich
+  # Requires the ClusterRole in otel-collector.yaml and CLUSTER_NAME env var.
+  k8sattributes:
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.node.name
+        - k8s.deployment.name
+        - k8s.replicaset.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.job.name
+        - k8s.cronjob.name
+        - k8s.container.name
+      annotations:
+        - from: pod
+          key: metadata.dynatrace.com
+          tag_name: metadata.dynatrace.com
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.ip
+      - sources:
+          - from: connection
+  transform:
+    error_mode: ignore
+    trace_statements: &k8s_transform
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "${env:CLUSTER_NAME}")
+          - set(attributes["k8s.workload.kind"], "job") where IsString(attributes["k8s.job.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.job.name"]) where IsString(attributes["k8s.job.name"])
+          - set(attributes["k8s.workload.kind"], "cronjob") where IsString(attributes["k8s.cronjob.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.cronjob.name"]) where IsString(attributes["k8s.cronjob.name"])
+          - set(attributes["k8s.workload.kind"], "daemonset") where IsString(attributes["k8s.daemonset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.daemonset.name"]) where IsString(attributes["k8s.daemonset.name"])
+          - set(attributes["k8s.workload.kind"], "statefulset") where IsString(attributes["k8s.statefulset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.statefulset.name"]) where IsString(attributes["k8s.statefulset.name"])
+          - set(attributes["k8s.workload.kind"], "replicaset") where IsString(attributes["k8s.replicaset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.replicaset.name"]) where IsString(attributes["k8s.replicaset.name"])
+          - set(attributes["k8s.workload.kind"], "deployment") where IsString(attributes["k8s.deployment.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.deployment.name"]) where IsString(attributes["k8s.deployment.name"])
+          # Merge Dynatrace Operator metadata annotation (JSON), if present
+          - merge_maps(attributes, ParseJSON(attributes["metadata.dynatrace.com"]), "upsert") where IsString(attributes["metadata.dynatrace.com"])
+          - delete_key(attributes, "metadata.dynatrace.com")
+    metric_statements: *k8s_transform
+    log_statements: *k8s_transform
+  # Traces only (kept separate from "transform" above, whose statement list is shared with metrics and
+  # logs, where span-context statements are not valid).
+  # The LangChain instrumentation labels the agent's LLM calls provider "Langchain" and model "unknown",
+  # which splits them from the NeMo Guardrails spans in the GenAI Smartscape. Relabel them as the NIM
+  # model the agent uses. Keep the model name in sync with llms.nim_llm.model_name in
+  # src/nat_simple_web_query/configs/config.yml.k8s. Only spans still labelled "unknown" are changed,
+  # and request.model is set last so the "unknown" test holds for every statement before it.
+  transform/genai:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(span.attributes["gen_ai.provider.name"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.system"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.response.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.request.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
 
 exporters:
   otlphttp:
@@ -60,15 +129,15 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: []
+      processors: [k8sattributes, transform, transform/genai]
       exporters: [otlphttp]
     metrics:
       receivers: [otlp,prometheus]
-      processors: [cumulativetodelta]
+      processors: [k8sattributes, transform, cumulativetodelta]
       exporters: [otlphttp]
     logs:
       receivers: [otlp]
-      processors: []
+      processors: [k8sattributes, transform]
       exporters: [otlphttp]
   telemetry:
     logs:
