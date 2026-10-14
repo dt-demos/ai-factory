@@ -47,11 +47,11 @@ The collector receives OTLP from the app on `dynatrace-otel-collector.nim:4317/4
 
 ```bash
 # Set DT_BASE_URL and DT_API_TOKEN in sample-apps/nat-chat-app/.env (see "Configuration file" above)
-./deploy-otel-collector.sh apply    # also creates the nim namespace if needed
+./deploy-otel-collector.sh start    # also creates the nim namespace if needed
 ./deploy-otel-collector.sh status
 ```
 
-After you edit `otel/config.yaml`, run `apply` again. It updates the ConfigMap and restarts the collector.
+After you edit `otel/config.yaml`, run `start` again. It updates the ConfigMap and restarts the collector.
 
 Check that metrics reach Dynatrace with these DQL queries:
 
@@ -66,7 +66,7 @@ Follow [Building and pushing the image](../../README.md#building-and-pushing-the
 
 ## 4. Set the configuration
 
-Set `TAVILY_API_KEY` in `sample-apps/nat-chat-app/.env`. `deploy-app.sh` stores it in the `app-secrets` Secret, so it never goes in `app.yaml`. Edit the other settings in `app.yaml` before you apply it.
+Set `TAVILY_API_KEY` in `sample-apps/nat-chat-app/.env`. `deploy-app.sh` stores it in the `app-secrets` Secret, so it never goes in `app.yaml`. Edit the other settings in `app.yaml` before you start the app.
 
 | Setting | Where | Value |
 |---|---|---|
@@ -78,7 +78,7 @@ Set `TAVILY_API_KEY` in `sample-apps/nat-chat-app/.env`. `deploy-app.sh` stores 
 ## 5. Deploy the app
 
 ```bash
-./deploy-app.sh apply
+./deploy-app.sh start
 kubectl -n nim logs deploy/nat-chat-app | head -20   # look for "Generating config for type: k8s"
 ```
 

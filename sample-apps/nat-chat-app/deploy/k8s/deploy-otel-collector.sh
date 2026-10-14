@@ -6,7 +6,7 @@
 #   Set these in sample-apps/nat-chat-app/.env (or export them):
 #     DT_BASE_URL=https://<tenant>.live.dynatrace.com
 #     DT_API_TOKEN=<token with openTelemetryTrace.ingest, metrics.ingest, logs.ingest>
-#   ./deploy-otel-collector.sh apply    # create/update secret, configmap, deployment
+#   ./deploy-otel-collector.sh start    # create/update secret, configmap, deployment, then (re)start it
 #   ./deploy-otel-collector.sh status   # pod status + recent logs
 #   ./deploy-otel-collector.sh delete   # remove everything
 
@@ -20,7 +20,7 @@ SECRET=dynatrace-otelcol-dt-api-credentials
 CONFIGMAP=dynatrace-otel-collector-config
 DEPLOYMENT=dynatrace-otel-collector
 
-apply() {
+start() {
   : "${DT_BASE_URL:?DT_BASE_URL not set}"
   : "${DT_API_TOKEN:?DT_API_TOKEN not set}"
 
@@ -37,7 +37,7 @@ apply() {
 
   kubectl apply -f "$SCRIPT_DIR/otel/otel-collector.yaml"
 
-  # Pick up config/secret changes on re-apply
+  # Pick up config/secret changes when start is run again
   kubectl -n "$NAMESPACE" rollout restart deployment "$DEPLOYMENT"
   kubectl -n "$NAMESPACE" rollout status deployment "$DEPLOYMENT" --timeout=120s
 }
@@ -56,8 +56,8 @@ delete() {
 }
 
 case "${1:-}" in
-  apply)  apply ;;
+  start)  start ;;
   status) status ;;
   delete) delete ;;
-  *) echo "Usage: $0 {apply|status|delete}"; exit 1 ;;
+  *) echo "Usage: $0 {start|status|delete}"; exit 1 ;;
 esac
