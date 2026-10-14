@@ -138,7 +138,7 @@ Expect two traces per run of `quick-test-app.py` (one per mode), each with a sin
 
 ## 8. Continuous load
 
-[`loadgen/`](loadgen/) keeps a steady stream of prompts going, a mix of questions that should be answered and questions the guardrails should block. It is useful for filling dashboards and for checking the guardrails over time.
+[`loadgen/`](loadgen/) keeps a steady stream of prompts going, a mix of questions that should be answered and questions the guardrails should block. It is useful for filling dashboards and for checking the guardrails over time. All commands and settings are in [loadgen/README.md](loadgen/README.md).
 
 ```bash
 cd loadgen
