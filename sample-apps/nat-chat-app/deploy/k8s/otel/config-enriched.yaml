@@ -102,6 +102,22 @@ processors:
           - delete_key(attributes, "metadata.dynatrace.com")
     metric_statements: *k8s_transform
     log_statements: *k8s_transform
+  # Traces only (kept separate from "transform" above, whose statement list is shared with metrics and
+  # logs, where span-context statements are not valid).
+  # The LangChain instrumentation labels the agent's LLM calls provider "Langchain" and model "unknown",
+  # which splits them from the NeMo Guardrails spans in the GenAI Smartscape. Relabel them as the NIM
+  # model the agent uses. Keep the model name in sync with llms.nim_llm.model_name in
+  # src/nat_simple_web_query/configs/config.yml.k8s. Only spans still labelled "unknown" are changed,
+  # and request.model is set last so the "unknown" test holds for every statement before it.
+  transform/genai:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - set(span.attributes["gen_ai.provider.name"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.system"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.response.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          - set(span.attributes["gen_ai.request.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
 
 exporters:
   otlphttp:
@@ -113,7 +129,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [k8sattributes, transform]
+      processors: [k8sattributes, transform, transform/genai]
       exporters: [otlphttp]
     metrics:
       receivers: [otlp,prometheus]
