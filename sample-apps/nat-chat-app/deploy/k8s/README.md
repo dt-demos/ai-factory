@@ -4,22 +4,22 @@ The app runs as a pod and calls NIM services in the same cluster (`CONFIG_TYPE=k
 
 | File | Purpose |
 |---|---|
-| `test-nim-endpoints.sh` | Checks every NIM model (prompt and metrics) and the DCGM GPU metrics from inside the cluster |
+| `tests/test-nim-endpoints.sh` | Checks every NIM model (prompt and metrics) and the DCGM GPU metrics from inside the cluster |
 | `otel/otel-collector.yaml` | Dynatrace OTel Collector ServiceAccount, RBAC, Deployment and Service ([raw manifest approach](https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector/deployment#kubernetes--raw-manifest)) |
 | `otel/config.yaml` | Collector config: OTLP receiver, Prometheus scraping of the NIMs and DCGM, and Kubernetes enrichment of the telemetry |
-| `deploy-otel-collector.sh` | Creates the Dynatrace secret and the collector ConfigMap (from `otel/config.yaml`), then applies `otel/otel-collector.yaml` |
+| `otel/deploy-otel-collector.sh` | Creates the Dynatrace secret and the collector ConfigMap (from `otel/config.yaml`), then applies `otel/otel-collector.yaml` |
 | `app.yaml` | Chat app: ConfigMap, Deployment and LoadBalancer Service |
 | `load-env.sh` | Sourced by the deploy scripts to load `sample-apps/nat-chat-app/.env` |
 | `deploy-app.sh` | Creates the `app-secrets` Secret from `TAVILY_API_KEY`, then applies `app.yaml` |
 
 ## Configuration file
 
-`deploy-app.sh`, `deploy-otel-collector.sh` and `loadgen/loadgen.sh` read their settings from `sample-apps/nat-chat-app/.env`, which is gitignored. Copy `.env.template` to `.env` to start. Values in the file override variables already set in your shell. Uncomment the CLOUD section of the template and fill in `TAVILY_API_KEY`, `DT_BASE_URL` and `DT_API_TOKEN` (scopes: `openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`).
+`deploy-app.sh`, `otel/deploy-otel-collector.sh` and `loadgen/loadgen.sh` read their settings from `sample-apps/nat-chat-app/.env`, which is gitignored. Copy `.env.template` to `.env` to start. Values in the file override variables already set in your shell. Uncomment the CLOUD section of the template and fill in `TAVILY_API_KEY`, `DT_BASE_URL` and `DT_API_TOKEN` (scopes: `openTelemetryTrace.ingest`, `metrics.ingest`, `logs.ingest`).
 
 ## 1. Check the NIM models
 
 ```bash
-./test-nim-endpoints.sh
+./tests/test-nim-endpoints.sh
 ```
 
 All models should show `yes` in both summary tables. The script runs a temporary curl pod, so you need kubectl access to the cluster.
@@ -47,8 +47,8 @@ The collector receives OTLP from the app on `dynatrace-otel-collector.nim:4317/4
 
 ```bash
 # Set DT_BASE_URL and DT_API_TOKEN in sample-apps/nat-chat-app/.env (see "Configuration file" above)
-./deploy-otel-collector.sh start    # also creates the nim namespace if needed
-./deploy-otel-collector.sh status
+./otel/deploy-otel-collector.sh start    # also creates the nim namespace if needed
+./otel/deploy-otel-collector.sh status
 ```
 
 After you edit `otel/config.yaml`, run `start` again. It updates the ConfigMap and restarts the collector.
@@ -62,7 +62,7 @@ timeseries avg(DCGM_FI_DEV_GPU_UTIL), by: { Hostname, gpu }
 
 ## 3. Publish the app image
 
-Follow [Building and pushing the image](../../README.md#building-and-pushing-the-image) in the app README. Then set the new tag in `image:` in `app.yaml`. It's currently `docker.io/dtdemos/nat-chat-app:0.7`.
+Follow [Building and pushing the image](../../README.md#building-and-pushing-the-image) in the app README. Then set the new tag in `image:` in `app.yaml`.
 
 ## 4. Set the configuration
 
@@ -98,22 +98,22 @@ kubectl -n nim port-forward svc/nat-chat-app 8501:80
 
 ## 7. Quick test
 
-[`quick-test-app.py`](quick-test-app.py) asks one question with and without NeMo Guardrails and exits non-zero if either run fails. Run it from a machine with `kubectl` access:
+[`quick-test-app.py`](tests/quick-test-app.py) asks one question with and without NeMo Guardrails and exits non-zero if either run fails. Run it from a machine with `kubectl` access:
 
 ```bash
-./quick-test-app.sh
+./tests/quick-test-app.sh
 ```
 
-[`quick-test-app.sh`](quick-test-app.sh) is a wrapper for this command (copy `quick-test-app.py` to another machine and run the command there if you prefer):
+[`quick-test-app.sh`](tests/quick-test-app.sh) is a wrapper for this command (copy `quick-test-app.py` to another machine and run the command there if you prefer):
 
 ```bash
-kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < quick-test-app.py
+kubectl -n nim exec -i deploy/nat-chat-app -c app -- python - < tests/quick-test-app.py
 ```
 
 Arguments go through to `quick-test-app.py`. For example, one mode with your own question:
 
 ```bash
-./quick-test-app.sh "What is Dynatrace?" --mode with
+./tests/quick-test-app.sh "What is Dynatrace?" --mode with
 ```
 
 `--mode` is `with`, `without` or `both` (the default).
@@ -179,14 +179,14 @@ The process exits after `LOADGEN_MAX_ITERATIONS` (200) prompts and Kubernetes re
 ## Troubleshooting
 
 * **`ErrImagePull` or `ImagePullBackOff`:** the tag in `app.yaml` doesn't exist in the registry, or the repository is private and needs an `imagePullSecret` (step 3).
-* **Model calls fail:** run `./test-nim-endpoints.sh`. Also check that the services resolve from the app pod:
+* **Model calls fail:** run `./tests/test-nim-endpoints.sh`. Also check that the services resolve from the app pod:
   `kubectl -n nim exec deploy/nat-chat-app -- curl -s http://nemotron-70b-instruct.nim-service:8000/v1/models`
-* **No traces in Dynatrace:** check `./deploy-otel-collector.sh status`, and check that `OTEL_OTLP_ENDPOINT` matches the collector Service.
+* **No traces in Dynatrace:** check `./otel/deploy-otel-collector.sh status`, and check that `OTEL_OTLP_ENDPOINT` matches the collector Service.
 * **`forbidden` errors in the collector logs:** the RBAC in `otel/otel-collector.yaml` didn't apply. Your kubectl user needs permission to create a Role in `gpu-operator`.
 
 ## Remove
 
 ```bash
 ./deploy-app.sh delete
-./deploy-otel-collector.sh delete
+./otel/deploy-otel-collector.sh delete
 ```

@@ -21,12 +21,12 @@ cp .env.template .env
 Run from the app root (`sample-apps/nat-chat-app`):
 
 ```bash
-python3.11 -m venv .venv
+cd sample-apps/nat-chat-app/
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
 set -a; source .env; set +a                     # export the variables from .env
-export OTEL_OTLP_ENDPOINT=http://localhost:4318  # the collector runs on localhost, not host.docker.internal
 
 python update_config.py cloud                    # activates config.yml.cloud
 streamlit run app.py
@@ -37,7 +37,7 @@ streamlit run app.py
 Use the published image, or build your own (see [Building and pushing the image](../../README.md#building-and-pushing-the-image)). Run from the app root, where `.env` is:
 
 ```bash
-export IMAGE=docker.io/dtdemos/nat-chat-app:0.7
+export IMAGE=$(grep -o 'docker.io/dtdemos/nat-chat-app:[0-9.]*' deploy/k8s/app.yaml)   # the tag Kubernetes uses
 ```
 
 Run detached:
@@ -58,22 +58,12 @@ Open the app at `http://localhost:8501` with either option.
 
 ## Optional: OTel Collector
 
-The [otel](otel/) folder runs the [Dynatrace OTel Collector](https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector) as a Docker container. It listens on `localhost:4317` (gRPC) and `localhost:4318` (HTTP).
-
-| Config | Use |
-|---|---|
-| `config.yaml` (default) | OTLP in, Dynatrace out. This is all the cloud profile needs. |
-| `config-nim.yaml` | Also scrapes `/v1/metrics` from NIM containers you run yourself on `NIM_HOST`, ports 8001–8003 |
-
-Create an API token with the scopes `openTelemetryTrace.ingest`, `metrics.ingest` and `logs.ingest`, then:
+The [otel](otel/README.md) folder runs the Dynatrace OTel Collector as a Docker container on `localhost:4317` (gRPC) and `localhost:4318` (HTTP). It reads `DT_BASE_URL` and `DT_API_TOKEN` from the same `.env` as the app (uncomment them in the LOCAL section):
 
 ```bash
 cd deploy/local/otel
-cp .env-otel-template .env      # set DT_BASE_URL and DT_API_TOKEN (and NIM_HOST for config-nim.yaml)
-source .env
-
 ./start-otel.sh                 # or: ./start-otel.sh config-nim.yaml
 ./stop-otel.sh
 ```
 
-If you don't run a collector, set `OTEL_SDK_DISABLED=true` in `.env`.
+See the [otel README](otel/README.md) for the token scopes, `config-nim.yaml` and troubleshooting. If you don't run a collector, set `OTEL_SDK_DISABLED=true` in `.env`.

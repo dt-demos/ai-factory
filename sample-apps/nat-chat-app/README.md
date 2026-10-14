@@ -18,9 +18,11 @@ This diagram below depicts the setup consisting of:
 
 ![Architecture](static/architecture.png)
 
+See [NIM-VLLM-OBSERVABILITY.md](NIM-VLLM-OBSERVABILITY.md) for additional details on NVIDIA observability.
+
 ## Prerequisites
 
-- Tavily API key (used for web search)
+- Tavily API key (used for web search). Sign up at [tavily.com](https://tavily.com), then copy a key (it starts with `tvly-`) from the API Keys section of the dashboard. The free plan has a monthly credit limit, so check it before running the [load generator](deploy/k8s/loadgen/README.md)
 - NVIDIA API key from [build.nvidia.com](https://build.nvidia.com) (only for the `cloud` profile)
 - Dynatrace environment and API token for OTLP ingest (for traces, logs and metrics)
 
@@ -69,7 +71,7 @@ The published image is `docker.io/dtdemos/nat-chat-app`. The version used by Kub
 Run from this directory (`sample-apps/nat-chat-app`):
 
 ```bash
-export IMAGE=docker.io/dtdemos/nat-chat-app:0.1
+export IMAGE=docker.io/dtdemos/nat-chat-app:<new-tag>   # for example, one more than the tag in deploy/k8s/app.yaml
 
 docker login docker.io -u <dockerhub-user>     # password: a Docker Hub access token
 docker build --platform linux/amd64 -t $IMAGE .

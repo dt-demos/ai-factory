@@ -42,7 +42,7 @@ llms:
 ```
 
 **References:**
-- NAT LLM configuration: https://docs.nvidia.com/nemo/agent-toolkit/1.2/workflows/llms/index.html
+- NAT LLM configuration: https://docs.nvidia.com/nemo/agent-toolkit/latest/build-workflows/llms/index.html
 - NAT using local LLMs (vLLM): https://docs.nvidia.com/nemo/agent-toolkit/1.2/workflows/llms/using-local-llms.html
 - NAT OTel Collector integration: https://docs.nvidia.com/nemo/agent-toolkit/1.2/workflows/observe/observe-workflow-with-otel-collector.html
 

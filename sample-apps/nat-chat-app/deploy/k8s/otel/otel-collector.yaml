@@ -4,7 +4,7 @@
 #
 # Prerequisites (both created by deploy-otel-collector.sh):
 #   Secret    dynatrace-otelcol-dt-api-credentials  (DT_BASE_URL, DT_API_TOKEN)
-#   ConfigMap dynatrace-otel-collector-config        (from otel/config.yaml)
+#   ConfigMap dynatrace-otel-collector-config        (from config.yaml)
 # ---------------------------------------------------------------------------
 apiVersion: v1
 kind: ServiceAccount

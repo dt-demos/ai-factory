@@ -2,7 +2,7 @@
 
 Sends a steady, mixed stream of prompts to the nat-chat-app: questions that should be answered, and questions that the guardrails should block. Use it to keep Dynatrace dashboards populated and to check the guardrails over time.
 
-It runs inside the cluster as its own pod, from the same image as the app, and drives the real `app.py` headlessly (the same way [`../quick-test-app.py`](../quick-test-app.py) does). Each prompt has an expected outcome, and the generator logs a line saying whether the app did what was expected.
+It runs inside the cluster as its own pod, from the same image as the app, and drives the real `app.py` headlessly (the same way [`../tests/quick-test-app.py`](../tests/quick-test-app.py) does). Each prompt has an expected outcome, and the generator logs a line saying whether the app did what was expected.
 
 | File | What it is |
 |---|---|
@@ -35,7 +35,7 @@ Run from this folder on a machine with `kubectl` access to the cluster. The app 
 `start` uses the image the `nat-chat-app` deployment is running, so the generator always matches the app. To use a different image, set `IMAGE`:
 
 ```bash
-IMAGE=docker.io/dtdemos/nat-chat-app:0.8 ./loadgen.sh start
+IMAGE=docker.io/dtdemos/nat-chat-app:<tag> ./loadgen.sh start
 ```
 
 ## Settings

@@ -221,6 +221,19 @@ def initialize_guardrails():
         log(f"❌ Error initializing guardrails: {e}")
         return None
 
+@st.cache_resource
+def get_event_loop():
+    """One event loop for the life of the process.
+
+    The cached guardrails client and NAT workflow hold async HTTP connections bound to the
+    loop they were created on. A fresh loop per query (then closed) leaves them dead, which
+    surfaces as "the handler is closed" on the second and later queries.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop
+
+
 def _rails_only_content(result) -> str:
     """Return the message text from a rails-only generate_async() result.
 
@@ -615,10 +628,9 @@ def main():
                             status_text.text("⚡ Skipping guardrails...")
                         
                         # Run async processing
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
+                        loop = get_event_loop()
+                        asyncio.set_event_loop(loop)  # Streamlit may run each rerun on a different thread
                         results = loop.run_until_complete(process_query(user_input, user_option_guardrail, rails, Path(nat_config_path), status_text=status_text))
-                        loop.close()
 
                         # What happened to the prompt, and which guardrail stopped it if one did.
                         outcome, blocked_by = describe_outcome(results)

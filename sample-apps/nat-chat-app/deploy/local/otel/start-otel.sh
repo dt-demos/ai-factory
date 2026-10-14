@@ -1,8 +1,20 @@
 #!/bin/bash
 
-# Script to start Docker containers using specified config file
+# Start the Dynatrace OTel Collector in Docker with the given config file.
 # Usage: ./start-otel.sh [config.yaml|config-nim.yaml]
-# Default: config.yaml 
+# Default: config.yaml
+#
+# Reads DT_BASE_URL, DT_API_TOKEN (and NIM_HOST for config-nim.yaml) from
+# sample-apps/nat-chat-app/.env, or from your shell if that file doesn't set them.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../../../.env"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+fi
 
 # Get config file from command line argument or use default
 CONFIG_FILE=${1:-config.yaml}
@@ -18,6 +30,12 @@ case "$CONFIG_FILE" in
         exit 1
         ;;
 esac
+
+: "${DT_BASE_URL:?DT_BASE_URL not set (put it in sample-apps/nat-chat-app/.env)}"
+: "${DT_API_TOKEN:?DT_API_TOKEN not set (put it in sample-apps/nat-chat-app/.env)}"
+if [ "$CONFIG_FILE" = "config-nim.yaml" ]; then
+    : "${NIM_HOST:?NIM_HOST not set (put it in sample-apps/nat-chat-app/.env)}"
+fi
 
 # Function to start a container
 start_container() {
@@ -47,7 +65,7 @@ start_container() {
             echo "Starting with config.yaml..."
             echo "DT_BASE_URL = $DT_BASE_URL"
             echo "Container = "
-            docker run -d --rm -v "$(pwd)"/${config_file}:/etc/otelcol/config.yaml \
+            docker run -d --rm -v "$SCRIPT_DIR/${config_file}":/etc/otelcol/config.yaml \
             --name ${container_name} \
             -e DT_BASE_URL=$DT_BASE_URL \
             -e DT_API_TOKEN=$DT_API_TOKEN \
@@ -60,7 +78,7 @@ start_container() {
             echo "DT_BASE_URL = $DT_BASE_URL"
             echo "NIM_HOST = $NIM_HOST"
             echo "Container = "
-            docker run -d --rm -v "$(pwd)"/${config_file}:/etc/otelcol/config.yaml \
+            docker run -d --rm -v "$SCRIPT_DIR/${config_file}":/etc/otelcol/config.yaml \
             --name ${container_name} \
             -e DT_BASE_URL=$DT_BASE_URL \
             -e DT_API_TOKEN=$DT_API_TOKEN \

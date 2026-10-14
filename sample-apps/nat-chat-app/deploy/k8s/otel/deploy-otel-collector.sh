@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy the Dynatrace OTel Collector into the cluster using the raw-manifest
-# approach, with otel/config.yaml as the collector config.
+# approach, with config.yaml as the collector config.
 #
 # Usage:
 #   Set these in sample-apps/nat-chat-app/.env (or export them):
@@ -13,9 +13,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-. "$SCRIPT_DIR/load-env.sh"
+. "$SCRIPT_DIR/../load-env.sh"
 NAMESPACE=nim
-CONFIG_FILE="$SCRIPT_DIR/otel/config.yaml"
+CONFIG_FILE="$SCRIPT_DIR/config.yaml"
 SECRET=dynatrace-otelcol-dt-api-credentials
 CONFIGMAP=dynatrace-otel-collector-config
 DEPLOYMENT=dynatrace-otel-collector
@@ -35,7 +35,7 @@ start() {
     --from-file=otel-collector-config="$CONFIG_FILE" \
     --dry-run=client -o yaml | kubectl apply -f -
 
-  kubectl apply -f "$SCRIPT_DIR/otel/otel-collector.yaml"
+  kubectl apply -f "$SCRIPT_DIR/otel-collector.yaml"
 
   # Pick up config/secret changes when start is run again
   kubectl -n "$NAMESPACE" rollout restart deployment "$DEPLOYMENT"
@@ -50,7 +50,7 @@ status() {
 }
 
 delete() {
-  kubectl delete -f "$SCRIPT_DIR/otel/otel-collector.yaml" --ignore-not-found
+  kubectl delete -f "$SCRIPT_DIR/otel-collector.yaml" --ignore-not-found
   kubectl -n "$NAMESPACE" delete configmap "$CONFIGMAP" --ignore-not-found
   kubectl -n "$NAMESPACE" delete secret "$SECRET" --ignore-not-found
 }

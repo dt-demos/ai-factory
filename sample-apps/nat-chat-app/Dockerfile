@@ -17,7 +17,7 @@ COPY app.py .
 COPY update_config.py .
 COPY guardrails_config/ ./guardrails_config/
 COPY src/ ./src/
-COPY static/ ./static/
+COPY static/dell-dynatrace.png ./static/
 
 # Streamlit static file serving reads from ./static/ and serves at /app/static/
 ENV STREAMLIT_SERVER_ENABLE_STATIC_SERVING=true
