@@ -234,12 +234,28 @@ def _rails_only_content(result) -> str:
         return str(response.get("content", ""))
     return str(response)
 
+def _blocking_rail_label(result) -> str:
+    """Name the LLM guardrail that stopped a rails-only input check, from the generation log.
+
+    Content safety and topic control run side by side, so either (or both) can block; the first
+    rail in the log that stopped is reported. Falls back to a generic label if the log is missing.
+    """
+    for rail in getattr(getattr(result, "log", None), "activated_rails", None) or []:
+        if not rail.stop:
+            continue
+        name = (rail.name or "").lower()
+        if name.startswith("content safety"):
+            return "Content Safety"
+        if name.startswith("topic safety"):
+            return "Topic Control"
+    return "LLM Guardrails"
+
 async def check_input_guardrails(rails, user_input):
     """Apply input guardrails and return (is_safe, message).
 
     Python checks run first (fast, no LLM call). If all pass, the LLM-based
-    content safety check runs via rails.generate_async(). This lets us always
-    report which specific guardrail blocked the input.
+    content safety and topic control checks run via rails.generate_async(). This lets us
+    always report which specific guardrail blocked the input.
     """
     from actions import check_jailbreak, check_blocked_terms, check_input_length, check_politics
 
@@ -257,26 +273,28 @@ async def check_input_guardrails(rails, user_input):
             log(f"🚫 Input blocked by: {check_name}")
             return False, f"**{check_name}** — {refusal}"
 
-    # All Python checks passed — run LLM-based content safety
+    # All Python checks passed — run the LLM-based checks (content safety, topic control)
     guardrail_timeout = int(os.getenv("GUARDRAIL_TIMEOUT_SECONDS", "30"))
     try:
         start_time = time.time()
         # Input rails only: runs content safety / topic control (small NIMs) and skips the
         # main-LLM reply generation and output rails that a default call would also run.
+        # The activated-rails log says which rail stopped the prompt.
         input_result = await asyncio.wait_for(
             rails.generate_async(
                 messages=[{"role": "user", "content": user_input}],
-                options={"rails": ["input"]},
+                options={"rails": ["input"], "log": {"activated_rails": True}},
             ),
             timeout=guardrail_timeout,
         )
         duration = time.time() - start_time
-        log(f"⏱️  Input guardrail (LLM content safety) execution time: {duration:.2f} seconds")
+        log(f"⏱️  Input guardrail (LLM checks) execution time: {duration:.2f} seconds")
 
         # Rails-only echoes the input when it passes; anything else is a rail's refusal.
         if _rails_only_content(input_result).strip() != user_input.strip():
-            log("🚫 Input blocked by: LLM Content Safety")
-            return False, f"**LLM Content Safety** — {refusal}"
+            blocked_by = _blocking_rail_label(input_result)
+            log(f"🚫 Input blocked by: {blocked_by}")
+            return False, f"**{blocked_by}** — {refusal}"
 
         return True, "Input passed guardrails"
     except asyncio.TimeoutError:

@@ -134,7 +134,12 @@ def classify(at):
 
 
 def matches_expectation(expect, outcome):
-    return expect == "any" or expect == outcome
+    """expect is "any", "pass", "blocked:<label>", or "blocked:<label>|<label>" for several acceptable labels."""
+    if expect == "any":
+        return True
+    if expect.startswith("blocked:"):
+        return outcome in {f"blocked:{label}" for label in expect[len("blocked:"):].split("|")}
+    return expect == outcome
 
 
 def run_once(AppTest, app_path, prompt, mode, run_id, category):

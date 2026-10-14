@@ -1,5 +1,5 @@
 # Guardrails prompts for input/output validation
-# Models: nvidia/nemotron-3.5-content-safety (content_safety, topic_control), google/gemma-4-31b-it (main)
+# Models: nvidia/llama-3.1-nemoguard-8b-content-safety (content_safety), nvidia/llama-3.1-nemoguard-8b-topic-control (topic_control), nvidia/llama-3.1-nemotron-70b-instruct (main)
 prompts:
   - task: content_safety_check_input $model=content_safety
     messages:
@@ -13,7 +13,7 @@ prompts:
           User message: "{{ user_input }}"
 
           Is this message unsafe? Answer only "yes" or "no".
-    output_parser: verbose_v1
+    output_parser: is_content_safe
     max_tokens: 10
 
   - task: content_safety_check_output $model=content_safety
@@ -28,7 +28,7 @@ prompts:
           AI response: "{{ bot_response }}"
 
           Is this response unsafe? Answer only "yes" or "no".
-    output_parser: verbose_v1
+    output_parser: is_content_safe
     max_tokens: 10
 
   - task: self_check_input
@@ -62,93 +62,21 @@ prompts:
     output_parser: verbose_v1
     max_tokens: 10
 
+  # Topic control: block lifestyle topics (food, sports, entertainment, weather) and politics, and
+  # allow everything else. NeMo adds the on-topic/off-topic instruction itself and sends the user's
+  # message as a separate turn, so this text only describes the topics. Do not ask the model a
+  # different question here (for example yes/no): it makes the model unreliable. The topic action
+  # reads the reply directly, so there is no output_parser.
   - task: topic_safety_check_input $model=topic_control
     content: |
-      You are a topic safety classifier. Determine if the user message contains political content that should be blocked.
-      Block content about: politicians, political parties, elections, voting, political campaigns, political opinions, or government controversies.
-      Allow content about: general knowledge, technology, science, business, history, geography, and factual non-political topics.
-
-      User message: {{ user_input }}
-
-      Does this message contain blocked political content? Answer only "yes" or "no".
-    output_parser: verbose_v1
-    max_tokens: 10
-
-  # NeMoGuard Topic Control - Input validation using self-check pattern (legacy)
-  - task: topic_safety_check_input_legacy $model=topic_control
-    content: |
-      You are an AI assistant that helps users find information from the web. Your role is to ensure that you respond only to appropriate queries and adhere to the following guidelines.
-
-      Guidelines for the user messages:
-      - Do not answer questions about politics, politicians, elections, or political parties.
-      - Do not discuss political figures such as Trump, Biden, Obama, or any other politicians.
-      - Do not answer questions about sensitive topics related to politics, elections, or government controversies.
-      - Do not provide opinions on political matters or policies.
-      - Allow general knowledge questions, technical topics, and factual information requests.
-      - Your responses should be professional, accurate, and non-political.
-      - Allow user comments that are related to small talk and chit-chat.
-  
-  - task: self_check_input_topic $model=topic_control
-    content: |
-      You are a topic control system that determines if user queries contain BLOCKED content.
-      
-      BLOCKED TOPICS (must reject):
-      - Politics, political parties (Republican, Democrat, GOP, MAGA)
-      - Politicians (Trump, Biden, Obama, Clinton, any president or political figure)
-      - Elections, voting, campaigns
-      - Political policies, legislation, Congress, Senate
-      - Political opinions or debates
-      
-      ALLOWED TOPICS:
-      - General knowledge and factual questions
-      - Technical topics, programming, technology
-      - Science, history, geography, culture
-      - Business, finance, education
-      - Entertainment, sports, hobbies (non-political)
-      
-      TASK: Determine if the following user query contains BLOCKED political content.
-      
-      User query: {{ user_input }}
-      
-      Analysis Guidelines:
-      - If the query mentions politicians, elections, political parties, or political topics → say "yes" (blocked)
-      - If the query mentions Trump, Biden, president, Republican, Democrat, etc. → say "yes" (blocked)
-      - If the query is about general knowledge, tech, science, or other allowed topics → say "no" (allowed)
-      - If the query could be interpreted as political in nature → say "yes" (blocked)
-      
-      Respond with ONLY "yes" (if blocked/political) or "no" (if allowed)
-      
-      Answer:
-    output_parser: verbose_v1
-    max_tokens: 10
-
-  # NeMoGuard Topic Control - Output validation using self-check pattern
-  - task: self_check_output_topic $model=topic_control
-    content: |
-      You are a topic control system that verifies responses do not contain political content.
-      
-      BLOCKED CONTENT IN RESPONSES:
-      - Any discussion of politicians (Trump, Biden, Obama, etc.)
-      - Political parties, elections, or voting
-      - Political opinions or policy debates
-      - Government controversies or political news
-      
-      TASK: Determine if the bot's response contains BLOCKED political content.
-      
-      User query: {{ user_input }}
-      
-      Bot response: {{ bot_response }}
-      
-      Analysis Guidelines:
-      - If the response discusses politicians, elections, or political topics → say "yes" (blocked)
-      - If the response mentions Trump, Biden, political parties → say "yes" (blocked)
-      - If the response provides factual, non-political information → say "no" (allowed)
-      - If the response avoids political content entirely → say "no" (allowed)
-      
-      Respond with ONLY "yes" (if contains political content) or "no" (if clean)
-      
-      Answer:
-    output_parser: verbose_v1
+      You are a topic safety classifier for an AI assistant that answers factual questions about technology, business and general knowledge. Decide whether the user message is about one of the following blocked topics:
+      - restaurants, food, cooking and recipes
+      - sports and sporting events
+      - movies, television and other entertainment
+      - weather and weather forecasts
+      - politics: politicians, political parties, elections and voting
+      Everything else is allowed, including technology, software, AI, science, business, companies, people, news, finance and stock prices, history, geography and small talk.
+      If the user message is about a blocked topic, it violates the guidelines. Otherwise it does not violate them.
     max_tokens: 10
 
 
