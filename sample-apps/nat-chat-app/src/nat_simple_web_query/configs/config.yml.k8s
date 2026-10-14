@@ -1,0 +1,39 @@
+# NAT's own otelcollector trace exporter is intentionally not configured here. The app already traces
+# the NAT workflow through Traceloop (app.py); a second NAT exporter creates a separate, unlinked
+# "<workflow>" trace per prompt plus extra POSTs to the collector.
+
+function_groups:
+  internet_search:
+    _type: tavily
+    include: [search]
+
+functions:
+  current_datetime:
+    _type: current_datetime
+
+llms:
+  nim_llm:
+    _type: nim
+    model_name: nvidia/llama-3.1-nemotron-70b-instruct
+    base_url: http://nemotron-70b-instruct.nim-service:8000/v1
+    temperature: 0.1
+
+embedders:
+  nv-embedqa-e5-v5:
+    _type: nim
+    model_name: nvidia/nv-embedqa-e5-v5
+    base_url: http://embedqa-e5-v5.nim-service:8000/v1
+
+workflow:
+  _type: react_agent
+  tool_names: [internet_search__search, current_datetime]
+  llm_name: nim_llm
+  verbose: false
+  # Each extra ReAct iteration is another ~6-12 s 70B call that re-sends the growing context.
+  # One retry (2) lets the agent recover when the model answers "Thought:" without an Action or Final Answer.
+  parse_agent_response_max_retries: 2
+  max_tool_calls: 3
+  additional_instructions: |
+    Call internet_search__search at most once, with max_results of 2 or less, then answer from its result.
+    Pass the tool input as a plain JSON object with no markdown code fences.
+    After you receive search results, reply with "Thought: I now know the final answer" followed by "Final Answer: ..." in the same message. Never end a reply with only a Thought.

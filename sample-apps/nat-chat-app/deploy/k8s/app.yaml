@@ -1,0 +1,107 @@
+# ---------------------------------------------------------------------------
+# ConfigMap — non-sensitive runtime configuration
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: nim
+data:
+  # "k8s" activates config.yml.k8s: NIM services in the nim-service namespace
+  CONFIG_TYPE: "k8s"
+
+  # OpenTelemetry collector endpoint (Dynatrace OTel Collector from otel/otel-collector.yaml)
+  OTEL_OTLP_ENDPOINT: "http://dynatrace-otel-collector.nim.svc.cluster.local:4318"
+
+  # Optional suffix for the Dynatrace service name: nat-chat-app-<suffix>
+  SERVICE_NAME_SUFFIX: ""
+---
+# ---------------------------------------------------------------------------
+# Deployment
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nat-chat-app
+  namespace: nim
+  labels:
+    app: nat-chat-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nat-chat-app
+  template:
+    metadata:
+      labels:
+        app: nat-chat-app
+    spec:
+      # Authenticated Docker Hub pulls avoid anonymous 429 rate limits.
+      # Create first: kubectl -n nim create secret docker-registry dockerhub \
+      #   --docker-username=<user> --docker-password=<access-token>
+      imagePullSecrets:
+        - name: dockerhub
+      containers:
+        - name: app
+          image: docker.io/dtdemos/nat-chat-app:0.9
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+              name: http
+          envFrom:
+            - configMapRef:
+                name: app-config
+            - secretRef:
+                name: app-secrets
+          # Downward API: pod identity, added to the trace resource attributes (k8s.pod.name,
+          # service.instance.id) so traces can be traced back to the process that made them.
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+---
+# ---------------------------------------------------------------------------
+# Service — LoadBalancer for external frontend access
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: nat-chat-app
+  namespace: nim
+  labels:
+    app: nat-chat-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: nat-chat-app
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8501
+      protocol: TCP
