@@ -11,7 +11,7 @@ receivers:
        # Defaults point at the in-cluster lab services; override with env vars
        # (e.g. start-otel.sh sets these for a local Docker run).
        # Scrape every dcgm-exporter pod (one per GPU node). Scraping the Service
-       # only reaches one node per scrape. Requires the RBAC in k8s/otel-collector.yaml.
+       # only reaches one node per scrape. Requires the RBAC in otel-collector.yaml.
        - job_name: dcgm
          scrape_interval: 60s
          kubernetes_sd_configs:

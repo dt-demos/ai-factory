@@ -1,2 +1,0 @@
-traceloop-sdk>=0.60.0
-openai>=2.35.0

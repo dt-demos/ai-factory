@@ -1,0 +1,128 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  prometheus:
+     config:
+       scrape_configs:
+       # Defaults point at the in-cluster lab services; override with env vars
+       # (e.g. start-otel.sh sets these for a local Docker run).
+       # Scrape every dcgm-exporter pod (one per GPU node). Scraping the Service
+       # only reaches one node per scrape. Requires the RBAC in otel-collector.yaml.
+       - job_name: dcgm
+         scrape_interval: 60s
+         kubernetes_sd_configs:
+         - role: endpointslice
+           namespaces:
+             names: [gpu-operator]
+         relabel_configs:
+         - source_labels: [__meta_kubernetes_service_name]
+           regex: nvidia-dcgm-exporter
+           action: keep
+       - job_name: llama-3.1-nemotron-70b-instruct
+         scrape_interval: 10s
+         metrics_path: /metrics
+         static_configs:
+         - targets:
+            - ${env:NIM1_TARGET:-nemotron-70b-instruct.nim-service:8000}
+       - job_name: llama-3.1-nemoguard-8b-content-safety
+         scrape_interval: 10s
+         metrics_path: /v1/metrics
+         static_configs:
+         - targets:
+            - ${env:NIM2_TARGET:-content-safety.nim-service:8000}
+       - job_name: llama-3.1-nemoguard-8b-topic-control
+         scrape_interval: 10s
+         metrics_path: /v1/metrics
+         static_configs:
+         - targets:
+            - ${env:NIM3_TARGET:-topic-control.nim-service:8000}
+       - job_name: nv-embedqa-e5-v5
+         scrape_interval: 10s
+         metrics_path: /v1/metrics
+         static_configs:
+         - targets:
+            - ${env:NIM4_TARGET:-embedqa-e5-v5.nim-service:8000}
+processors:
+  cumulativetodelta:
+    max_staleness: 25h
+  # Kubernetes enrichment for OTLP data
+  # https://docs.dynatrace.com/docs/ingest-from/opentelemetry/collector/use-cases/kubernetes/k8s-enrich
+  # Requires the ClusterRole in otel-collector.yaml and CLUSTER_NAME env var.
+  k8sattributes:
+    extract:
+      metadata:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - k8s.pod.uid
+        - k8s.node.name
+        - k8s.deployment.name
+        - k8s.replicaset.name
+        - k8s.statefulset.name
+        - k8s.daemonset.name
+        - k8s.job.name
+        - k8s.cronjob.name
+        - k8s.container.name
+      annotations:
+        - from: pod
+          key: metadata.dynatrace.com
+          tag_name: metadata.dynatrace.com
+    pod_association:
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.uid
+      - sources:
+          - from: resource_attribute
+            name: k8s.pod.ip
+      - sources:
+          - from: connection
+  transform:
+    error_mode: ignore
+    trace_statements: &k8s_transform
+      - context: resource
+        statements:
+          - set(attributes["k8s.cluster.name"], "${env:CLUSTER_NAME}")
+          - set(attributes["k8s.workload.kind"], "job") where IsString(attributes["k8s.job.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.job.name"]) where IsString(attributes["k8s.job.name"])
+          - set(attributes["k8s.workload.kind"], "cronjob") where IsString(attributes["k8s.cronjob.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.cronjob.name"]) where IsString(attributes["k8s.cronjob.name"])
+          - set(attributes["k8s.workload.kind"], "daemonset") where IsString(attributes["k8s.daemonset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.daemonset.name"]) where IsString(attributes["k8s.daemonset.name"])
+          - set(attributes["k8s.workload.kind"], "statefulset") where IsString(attributes["k8s.statefulset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.statefulset.name"]) where IsString(attributes["k8s.statefulset.name"])
+          - set(attributes["k8s.workload.kind"], "replicaset") where IsString(attributes["k8s.replicaset.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.replicaset.name"]) where IsString(attributes["k8s.replicaset.name"])
+          - set(attributes["k8s.workload.kind"], "deployment") where IsString(attributes["k8s.deployment.name"])
+          - set(attributes["k8s.workload.name"], attributes["k8s.deployment.name"]) where IsString(attributes["k8s.deployment.name"])
+          # Merge Dynatrace Operator metadata annotation (JSON), if present
+          - merge_maps(attributes, ParseJSON(attributes["metadata.dynatrace.com"]), "upsert") where IsString(attributes["metadata.dynatrace.com"])
+          - delete_key(attributes, "metadata.dynatrace.com")
+    metric_statements: *k8s_transform
+    log_statements: *k8s_transform
+
+exporters:
+  otlphttp:
+    endpoint: "${env:DT_BASE_URL}/api/v2/otlp"
+    headers:
+      Authorization: "Api-Token ${env:DT_API_TOKEN}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [k8sattributes, transform]
+      exporters: [otlphttp]
+    metrics:
+      receivers: [otlp,prometheus]
+      processors: [k8sattributes, transform, cumulativetodelta]
+      exporters: [otlphttp]
+    logs:
+      receivers: [otlp]
+      processors: [k8sattributes, transform]
+      exporters: [otlphttp]
+  telemetry:
+    logs:
+      level: "debug"

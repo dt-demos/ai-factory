@@ -6,7 +6,7 @@ general:
         _type: otelcollector
         # The endpoint where you have deployed the otel collector
         endpoint: "${OTEL_OTLP_ENDPOINT:-http://localhost:4318}/v1/traces"
-        project: nat_workflow
+        project: "nat_workflow${SERVICE_NAME_SUFFIX:+-${SERVICE_NAME_SUFFIX}}"
 
 function_groups:
   internet_search:
@@ -20,19 +20,17 @@ functions:
 llms:
   nim_llm:
     _type: nim
-    model_name: mistralai/mistral-7b-instruct-v0.3
-    base_url: NVIDIA_MODEL_ENDPOINT_8001_PLACEHOLDER
+    model_name: google/gemma-4-31b-it
     temperature: 0.1
+    max_tokens: 1024
 
 embedders:
   nv-embedqa-e5-v5:
     _type: nim
-    model_name: nvidia/llama-3.2-nv-embedqa-1b-v2
-    base_url: NVIDIA_MODEL_ENDPOINT_8004_PLACEHOLDER
+    model_name: nvidia/nv-embedqa-e5-v5
 
 workflow:
-  _type: react_agent
+  _type: tool_calling_agent
   tool_names: [internet_search__search, current_datetime]
   llm_name: nim_llm
   verbose: false
-  parse_agent_response_max_retries: 3

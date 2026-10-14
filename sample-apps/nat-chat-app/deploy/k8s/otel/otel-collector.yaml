@@ -4,7 +4,7 @@
 #
 # Prerequisites (both created by deploy-otel-collector.sh):
 #   Secret    dynatrace-otelcol-dt-api-credentials  (DT_BASE_URL, DT_API_TOKEN)
-#   ConfigMap dynatrace-otel-collector-config        (from ../otel/config-dcgm-nim.yaml)
+#   ConfigMap dynatrace-otel-collector-config        (from otel/config.yaml)
 # ---------------------------------------------------------------------------
 apiVersion: v1
 kind: ServiceAccount
@@ -36,6 +36,32 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: dynatrace-otel-collector-sd
+subjects:
+  - kind: ServiceAccount
+    name: dynatrace-otel-collector
+    namespace: nim
+---
+# Used by the k8sattributes processor in otel/config-enriched.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dynatrace-otel-collector-k8sattributes
+rules:
+  - apiGroups: [""]
+    resources: [pods, namespaces, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dynatrace-otel-collector-k8sattributes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dynatrace-otel-collector-k8sattributes
 subjects:
   - kind: ServiceAccount
     name: dynatrace-otel-collector
@@ -89,6 +115,8 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: status.podIP
+            - name: CLUSTER_NAME
+              value: "dell-ai-factory" # shown as k8s.cluster.name; matches cluster name on existing logs
             - name: DT_BASE_URL
               valueFrom:
                 secretKeyRef:

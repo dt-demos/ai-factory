@@ -50,7 +50,7 @@ from traceloop.sdk import Traceloop
 # constants
 # ------------------------------------------------------------------------------
 # name used in tracing
-SERVICE_NAME = "nim-guardrails-chat" + ("-" + os.getenv("SERVICE_NAME_SUFFIX", "") if os.getenv("SERVICE_NAME_SUFFIX", "") else "")
+SERVICE_NAME = "nat-chat-app" + ("-" + os.getenv("SERVICE_NAME_SUFFIX", "") if os.getenv("SERVICE_NAME_SUFFIX", "") else "")
 # used in UI selectbox
 OPTION_WITH_GUARDRAILS = "With NeMo Guardrails"
 OPTION_WITHOUT_GUARDRAILS = "Without NeMo Guardrails"

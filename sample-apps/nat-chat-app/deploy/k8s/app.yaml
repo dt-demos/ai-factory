@@ -8,8 +8,6 @@ metadata:
   namespace: nim
 type: Opaque
 stringData:
-  # Required for NIM cloud API access (CONFIG_TYPE=build)
-  NVIDIA_API_KEY: "<your-nvidia-api-key>"
   # Required for web search (Tavily)
   TAVILY_API_KEY: "<your-tavily-api-key>"
 ---
@@ -22,28 +20,14 @@ metadata:
   name: app-config
   namespace: nim
 data:
-  # "build" uses NVIDIA cloud API endpoints; "brev" uses in-cluster NIM services
-  CONFIG_TYPE: "local"
+  # "k8s" activates config.yml.k8s: NIM services in the nim-service namespace
+  CONFIG_TYPE: "k8s"
 
-  # OpenTelemetry collector endpoint — update to your DT ActiveGate or OTel collector
-  # For in-cluster otel-collector:  http://dynatrace-otel-collector.nim.svc.cluster.local:4318
+  # OpenTelemetry collector endpoint (Dynatrace OTel Collector from otel/otel-collector.yaml)
   OTEL_OTLP_ENDPOINT: "http://dynatrace-otel-collector.nim.svc.cluster.local:4318"
 
-  # Set to the workshop participant's GitHub username for service-name scoping
-  GITHUB_USER: "" 
-
-  # -------------------------------------------------------------------------
-  # Only required when CONFIG_TYPE=brev (pointing at in-cluster NIM services)
-  # These point at the lab NIM services in the nim-service namespace.
-  # -------------------------------------------------------------------------
-  # nvidia/llama-3.1-nemotron-70b-instruct
-  NVIDIA_MODEL_ENDPOINT_8001: "http://nemotron-70b-instruct.nim-service.svc.cluster.local:8000/v1"
-  # nvidia/llama-3.1-nemoguard-8b-content-safety
-  NVIDIA_MODEL_ENDPOINT_8002: "http://content-safety.nim-service.svc.cluster.local:8000/v1"
-  # nvidia/llama-3.1-nemoguard-8b-topic-control
-  NVIDIA_MODEL_ENDPOINT_8003: "http://topic-control.nim-service.svc.cluster.local:8000/v1"
-  # nvidia/nv-embedqa-e5-v5
-  NVIDIA_MODEL_ENDPOINT_8004: "http://embedqa-e5-v5.nim-service.svc.cluster.local:8000/v1"
+  # Optional suffix for the Dynatrace service name: nat-chat-app-<suffix>
+  SERVICE_NAME_SUFFIX: ""
 ---
 # ---------------------------------------------------------------------------
 # Deployment
@@ -51,23 +35,28 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nvidia-workshop-app
+  name: nat-chat-app
   namespace: nim
   labels:
-    app: nvidia-workshop-app
+    app: nat-chat-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nvidia-workshop-app
+      app: nat-chat-app
   template:
     metadata:
       labels:
-        app: nvidia-workshop-app
+        app: nat-chat-app
     spec:
+      # Authenticated Docker Hub pulls avoid anonymous 429 rate limits.
+      # Create first: kubectl -n nim create secret docker-registry dockerhub \
+      #   --docker-username=<user> --docker-password=<access-token>
+      imagePullSecrets:
+        - name: dockerhub
       containers:
         - name: app
-          image: nvidia-workshop-app:latest
+          image: docker.io/dtdemos/nat-chat-app:0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501
@@ -105,14 +94,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: nvidia-workshop-app
+  name: nat-chat-app
   namespace: nim
   labels:
-    app: nvidia-workshop-app
+    app: nat-chat-app
 spec:
   type: LoadBalancer
   selector:
-    app: nvidia-workshop-app
+    app: nat-chat-app
   ports:
     - name: http
       port: 80

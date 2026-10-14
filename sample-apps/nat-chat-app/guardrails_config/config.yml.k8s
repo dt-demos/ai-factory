@@ -45,6 +45,8 @@ rails:
       - check_politics
       # Content safety check using NeMoGuard Content Safety model
       - content safety check input $model=content_safety
+      # Topic control check using NeMoGuard Topic Control model
+      - topic safety check input $model=topic_control
 
   output:
     flows:
