@@ -56,7 +56,7 @@ spec:
         - name: dockerhub
       containers:
         - name: app
-          image: docker.io/dtdemos/nat-chat-app:0.5
+          image: docker.io/dtdemos/nat-chat-app:0.6
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501

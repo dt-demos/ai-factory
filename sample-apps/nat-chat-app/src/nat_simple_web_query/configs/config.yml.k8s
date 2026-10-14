@@ -36,3 +36,4 @@ workflow:
   additional_instructions: |
     Call internet_search__search at most once, with max_results of 2 or less, then answer from its result.
     Pass the tool input as a plain JSON object with no markdown code fences.
+    After you receive search results, reply with "Thought: I now know the final answer" followed by "Final Answer: ..." in the same message. Never end a reply with only a Thought.
