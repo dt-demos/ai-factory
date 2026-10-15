@@ -119,6 +119,18 @@ processors:
           - set(span.attributes["gen_ai.response.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
           - set(span.attributes["gen_ai.request.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
 
+  # Metrics counterpart of transform/genai. The LangChain instrumentation's gen_ai.client.* metrics carry
+  # gen_ai.system="Langchain" but no gen_ai.provider.name and no gen_ai.request.model, so the AI
+  # Observability dashboard's provider filter and per-model latency tiles match nothing. Add the provider
+  # (same value transform/genai sets on spans) and copy the response model into the request model.
+  transform/genai-metrics:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["gen_ai.provider.name"], "nim") where (metric.name == "gen_ai.client.token.usage" or metric.name == "gen_ai.client.operation.duration") and attributes["gen_ai.system"] == "Langchain" and attributes["gen_ai.provider.name"] == nil
+          - set(attributes["gen_ai.request.model"], attributes["gen_ai.response.model"]) where (metric.name == "gen_ai.client.token.usage" or metric.name == "gen_ai.client.operation.duration") and attributes["gen_ai.request.model"] == nil and attributes["gen_ai.response.model"] != nil
+
 exporters:
   otlphttp:
     endpoint: "${env:DT_BASE_URL}/api/v2/otlp"
@@ -133,7 +145,7 @@ service:
       exporters: [otlphttp]
     metrics:
       receivers: [otlp,prometheus]
-      processors: [k8sattributes, transform, cumulativetodelta]
+      processors: [k8sattributes, transform, transform/genai-metrics, cumulativetodelta]
       exporters: [otlphttp]
     logs:
       receivers: [otlp]
