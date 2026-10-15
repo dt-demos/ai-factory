@@ -118,6 +118,12 @@ processors:
           - set(span.attributes["gen_ai.system"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
           - set(span.attributes["gen_ai.response.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
           - set(span.attributes["gen_ai.request.model"], "nvidia/llama-3.1-nemotron-70b-instruct") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.attributes["gen_ai.request.model"] == "unknown"
+          # Mark the LangGraph workflow span as an agent invocation (OTel GenAI agent convention) so
+          # Dynatrace creates a GENAI_AGENT Smartscape node for the AI Observability dashboard's Agents tiles.
+          # They filter agents by gen_ai.provider.name, so set it here too.
+          - set(span.attributes["gen_ai.operation.name"], "invoke_agent") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.name == "LangGraph.workflow"
+          - set(span.attributes["gen_ai.agent.name"], "nat-chat-agent") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.name == "LangGraph.workflow"
+          - set(span.attributes["gen_ai.provider.name"], "nim") where instrumentation_scope.name == "opentelemetry.instrumentation.langchain" and span.name == "LangGraph.workflow"
 
   # Metrics counterpart of transform/genai. The LangChain instrumentation's gen_ai.client.* metrics carry
   # gen_ai.system="Langchain" but no gen_ai.provider.name and no gen_ai.request.model, so the AI
