@@ -56,6 +56,40 @@ NAT ReAct workflow (Tavily search + nemotron-70b LLM)
 7. content safety check output  ← LLM-based (nvidia/llama-3.1-nemoguard-8b-content-safety), on the real answer
 ```
 
+## Guardrail execution order, including every LLM call
+
+Same flow as above, but with each model call shown. Model names are for the `k8s` profile; the `cloud` profile uses the models in the [README](README.md#models-used).
+
+```
+User input
+    │
+    ▼
+1-4. Python checks (jailbreak, blocked terms, length, politics)   ← no LLM call
+    │   (first match blocks; no LLM is called)
+    ▼
+5. content safety check input  ──► LLM call: nvidia/llama-3.1-nemoguard-8b-content-safety  ┐ run side by side;
+6. topic safety check input    ──► LLM call: nvidia/llama-3.1-nemoguard-8b-topic-control    ┘ either can block
+    │
+    ▼
+NAT ReAct workflow
+    │
+    ├─► LLM call: nvidia/llama-3.1-nemotron-70b-instruct   (Thought: decide whether to search)
+    │       │
+    │       ▼
+    │   Tavily web search tool                             ← not an LLM
+    │       │
+    │       ▼ (Observation fed back; the loop repeats until the agent has a Final Answer)
+    └─► LLM call: nvidia/llama-3.1-nemotron-70b-instruct   (1 to N calls in total)
+    │
+    ▼
+7. content safety check output ──► LLM call: nvidia/llama-3.1-nemoguard-8b-content-safety, on the real answer
+    │
+    ▼
+Response to user
+```
+
+A prompt that passes every check makes 4 LLM calls at minimum: 2 input rails, 1 or more agent calls, and 1 output rail. A prompt blocked by a Python check makes none. A prompt blocked by an input rail never reaches the agent or the output rail.
+
 The app shows, and records in Dynatrace as `app.blocked_by`, which guardrail stopped a prompt: `Jailbreak Detection`, `Blocked Terms`, `Input Length Limit`, `Politics Filter`, `Content Safety` or `Topic Control`.
 
 ---
